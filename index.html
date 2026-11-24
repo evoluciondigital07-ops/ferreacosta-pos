@@ -702,7 +702,7 @@
     function renderTicket() {
       const container = document.getElementById("ticketItems");
       if (!state.ticket.length) {
-        container.innerHTML = <div class="item-meta">El ticket está vacío. Agrega o escanea un producto.</div>;
+        container.innerHTML = `<div class="item-meta">El ticket está vacío. Agrega o escanea un producto.</div>`;
       } else {
         container.innerHTML = state.ticket
           .map(
