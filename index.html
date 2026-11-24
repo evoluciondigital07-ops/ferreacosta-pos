@@ -665,8 +665,11 @@
   <div id="toast" class="toast"></div>
 
   <script>
-    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxK6A5CDszzXuCMJF-hctNSY-_Gg63Uy4Wl92wki97urBDpngEJoNqfIPh7_C19hMLL/exec";
+    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby6njXNH-BxZuqDGoZqg5iEw9lDNeR9AhopRtb5SPHgze_Fw6Vgq5jZ3tbC65L8QQKl/exec";
     var IVA_RATE = 0.15;
+    // true: suma IVA_RATE a precios que vienen sin IVA para mostrar precio final con IVA
+    // false: si el precio del producto ya viene con IVA incluido desde origen
+    var APLICAR_IVA_A_PRECIOS = true;
     var SCAN_COOLDOWN_MS = 1800;
 
     var DEFAULT_VENDORS = ["Vendedor 1", "Vendedor 2", "Vendedor 3"];
@@ -747,6 +750,14 @@
 
     function fmtMoney(n) {
       return "$" + (Number(n) || 0).toFixed(2);
+    }
+
+    function getUnitPrice(prod) {
+      var base = Number(prod && prod.precio) || 0;
+      if (APLICAR_IVA_A_PRECIOS) {
+        return Number((base * (1 + IVA_RATE)).toFixed(2));
+      }
+      return Number(base.toFixed(2));
     }
 
     function toggleSection(panelId, arrowId) {
@@ -832,14 +843,15 @@
       var list = el("productList");
       list.innerHTML = "";
       filtered.slice(0, 120).forEach(function (p) {
+        var unitFinal = getUnitPrice(p);
         var div = document.createElement("div");
         div.className = "prod-item";
         div.innerHTML =
           "<div>" +
             '<div class="prod-name">' + p.nombre + "</div>" +
-            '<div class="prod-meta">SKU/Codigo: ' + p.sku + " - " + (p.unidad || "und") + "</div>" +
+            '<div class="prod-meta">SKU/Codigo: ' + p.sku + " - " + (p.unidad || "und") + " (IVA incl.)</div>" +
           "</div>" +
-          '<div class="prod-price">' + fmtMoney(p.precio) + "</div>";
+          '<div class="prod-price">' + fmtMoney(unitFinal) + "</div>";
         div.onclick = function () { addProductToTicket(p, 1, true); };
         list.appendChild(div);
       });
@@ -848,6 +860,7 @@
     function addProductToTicket(prod, qty, withSound) {
       if (!prod) return;
       var amount = qty || 1;
+      var unitFinal = getUnitPrice(prod);
       var existing = null;
       for (var i = 0; i < ticket.length; i++) {
         if (ticket[i].sku === prod.sku) {
@@ -857,11 +870,12 @@
       }
       if (existing) {
         existing.cant += amount;
+        existing.precio = unitFinal;
       } else {
         ticket.push({
           sku: prod.sku,
           nombre: prod.nombre,
-          precio: Number(prod.precio) || 0,
+          precio: unitFinal,
           unidad: prod.unidad || "und",
           cant: amount
         });
@@ -905,7 +919,7 @@
         lastScanTime = now;
         addProductToTicket(match, 1, true);
         flashScannerHit(match.nombre);
-        showToast("Escaneado: " + match.nombre + " (" + fmtMoney(match.precio) + ")");
+        showToast("Escaneado: " + match.nombre + " (" + fmtMoney(getUnitPrice(match)) + ")");
         if (clearInputOnMatch) el("scanInput").value = "";
         setTimeout(function () { scanBusy = false; }, 350);
         return true;
@@ -922,11 +936,12 @@
 
     function getTotals() {
       var subtotalConIva = ticket.reduce(function (acc, item) {
-        return acc + (Number(item.precio) || 0) * (Number(item.cant) || 0);
+        var uPrice = Number(item.precio) || 0;
+        return acc + uPrice * (Number(item.cant) || 0);
       }, 0);
       var iva = 0;
-      var total = subtotalConIva;
-      return { subtotal: subtotalConIva, iva: iva, total: total };
+      var total = Number(subtotalConIva.toFixed(2));
+      return { subtotal: total, iva: iva, total: total };
     }
 
     function updateChangeCalc() {
@@ -976,13 +991,14 @@
         wrap.innerHTML = '<div class="prod-meta" style="text-align:center; padding:18px;">Escanea o selecciona productos para iniciar el ticket</div>';
       } else {
         ticket.forEach(function (item, idx) {
-          var sub = item.cant * item.precio;
+          var uPrice = Number(item.precio) || 0;
+          var sub = Number((item.cant * uPrice).toFixed(2));
           var row = document.createElement("div");
           row.className = "t-row";
           row.innerHTML =
             "<div>" +
               '<div class="prod-name">' + item.nombre + "</div>" +
-              '<div class="prod-meta">' + item.sku + " - " + fmtMoney(item.precio) + " / " + item.unidad + "</div>" +
+              '<div class="prod-meta">' + item.sku + " - " + fmtMoney(uPrice) + " / " + item.unidad + " (IVA incl.)</div>" +
             "</div>" +
             '<div class="qty-box">' +
               '<button type="button" class="btn-sm" onclick="changeQty(' + idx + ', -1)">-</button>' +
@@ -1100,12 +1116,13 @@
         efectivo_recibido: Number(efectivoRecibido.toFixed(2)),
         cambio: Number(cambio.toFixed(2)),
         items: ticket.map(function (i) {
+          var uPrice = Number(i.precio) || 0;
           return {
             sku: i.sku,
             nombre: i.nombre,
             cant: i.cant,
-            precio: Number(i.precio),
-            subtotal: Number((i.cant * i.precio).toFixed(2))
+            precio: Number(uPrice.toFixed(2)),
+            subtotal: Number((i.cant * uPrice).toFixed(2))
           };
         })
       };
