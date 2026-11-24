@@ -743,13 +743,13 @@
       const total = subtotal + iva;
 
       const lineas = [
-        FERREAcosta - ${state.modo},
-        Vendedor: ${state.vendedor},
-        Fecha: ${new Date().toLocaleString("es-EC")},
+        `FERREAcosta - ${state.modo}`,
+        `Vendedor: ${state.vendedor}`,
+        `Fecha: ${new Date().toLocaleString("es-EC")}`,
         "------------------------",
         ...state.ticket.map(
-          (i) => ${i.cantidad} x ${i.nombre} ($${i.precio.toFixed(2)}) = $${(i.cantidad * i.precio).toFixed(2)}
-        ),
+          (i) => `${i.cantidad} x ${i.nombre} ($${i.precio.toFixed(2)}) = $${(i.cantidad * i.precio).toFixed(2)}
+        )`,
         "------------------------",
         Subtotal: $${subtotal.toFixed(2)},
         IVA (15%): $${iva.toFixed(2)},
