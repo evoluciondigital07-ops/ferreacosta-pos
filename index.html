@@ -601,7 +601,7 @@
             <div class="item-price">$${Number(p.precio || 0).toFixed(2)}</div>
           </div>`
         )
-        .join("") || <div class="item-meta">No hay productos que coincidan con "${term}".</div>;
+        .join("") || `<div class="item-meta">No hay productos que coincidan con "${term}".</div>`;
 
       const fullCatalogList = document.getElementById("fullCatalogList");
       fullCatalogList.innerHTML = state.catalogo
