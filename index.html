@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>FERREAcosta POS — Caja Supermercado</title>
+  <title>FERREAcosta POS - Caja Supermercado</title>
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
   <style>
     :root {
@@ -532,7 +532,7 @@
           <div>
             <label class="prod-meta">Billete / Moneda Entregado</label>
             <select id="denomLabel" style="width:100%; margin-top:4px;">
-              <option value="">— Sin seleccionar —</option>
+              <option value="">- Sin seleccionar -</option>
               <option value="Exacto">Monto Exacto</option>
               <option value="Moneda $0.05">Moneda $0.05</option>
               <option value="Moneda $0.10">Moneda $0.10</option>
@@ -556,7 +556,7 @@
         </button>
 
         <div id="billsCollapsible" class="collapsible-panel open" style="margin-top:8px;">
-          <div class="denom-section-title">Monedas ($0.05 · $0.10 · $0.25 · $0.50 · $1.00)</div>
+          <div class="denom-section-title">Monedas ($0.05 - $0.10 - $0.25 - $0.50 - $1.00)</div>
           <div class="bills-grid">
             <button type="button" class="bill-btn" data-amt="0.05" data-lbl="Moneda $0.05">$0.05</button>
             <button type="button" class="bill-btn" data-amt="0.10" data-lbl="Moneda $0.10">$0.10</button>
@@ -565,7 +565,7 @@
             <button type="button" class="bill-btn" data-amt="1.00" data-lbl="Moneda $1.00">$1.00</button>
           </div>
 
-          <div class="denom-section-title">Billetes ($1 · $5 · $10 · $20 · $50 · $100)</div>
+          <div class="denom-section-title">Billetes ($1 - $5 - $10 - $20 - $50 - $100)</div>
           <div class="bills-grid six-cols">
             <button type="button" class="bill-btn" data-amt="1" data-lbl="Billete $1">$1</button>
             <button type="button" class="bill-btn" data-amt="5" data-lbl="Billete $5">$5</button>
@@ -603,7 +603,7 @@
     <div class="modal">
       <div class="card-title" style="margin-bottom:8px;">
         <span>Administrar Vendedores</span>
-        <button type="button" id="btnCloseVendorModal" class="btn-sm">✕</button>
+        <button type="button" id="btnCloseVendorModal" class="btn-sm">X</button>
       </div>
       <div style="display:flex; gap:8px;">
         <input id="newVendorName" type="text" placeholder="Nombre del vendedor..." style="flex:1;" />
@@ -616,12 +616,11 @@
   <div id="toast" class="toast"></div>
 
   <script>
-    // Reemplaza por tu URL /exec de Google Apps Script
-    const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw6by6UIVGxr6xPjBOAJksm7Ga05wyAZh2quaziHWi2i-uN_LcC5oQ2wbr76_xQvuls/exec";
-    const IVA_RATE = 0.15;
+    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw6by6UIVGxr6xPjBOAJksm7Ga05wyAZh2quaziHWi2i-uN_LcC5oQ2wbr76_xQvuls/exec";
+    var IVA_RATE = 0.15;
 
-    const DEFAULT_VENDORS = ["Vendedor 1", "Vendedor 2", "Vendedor 3"];
-    const SAMPLE_CATALOG = [
+    var DEFAULT_VENDORS = ["Vendedor 1", "Vendedor 2", "Vendedor 3"];
+    var SAMPLE_CATALOG = [
       { sku: "FER-001", nombre: "Disco de corte metal 4-1/2\"", precio: 1.50, unidad: "und" },
       { sku: "FER-002", nombre: "Cable flexible #14 AWG negro", precio: 0.65, unidad: "m" },
       { sku: "FER-003", nombre: "Cinta aislante negra 3/4\"", precio: 1.10, unidad: "und" },
@@ -630,39 +629,41 @@
       { sku: "FER-006", nombre: "Interruptor sencillo 3V blanco", precio: 2.75, unidad: "und" }
     ];
 
-    let vendors = JSON.parse(localStorage.getItem("fa_vendors") || "null") || DEFAULT_VENDORS;
-    let catalog = JSON.parse(localStorage.getItem("fa_catalog") || "null") || SAMPLE_CATALOG;
-    let ticket = [];
-    let mode = "VENTA";
-    let streamRef = null;
-    let scanLoopId = null;
-    let zxingReader = null;
-    let lastScanCode = "";
-    let lastScanTime = 0;
-    let autoScanTimer = null;
+    var vendors = JSON.parse(localStorage.getItem("fa_vendors") || "null") || DEFAULT_VENDORS;
+    var catalog = JSON.parse(localStorage.getItem("fa_catalog") || "null") || SAMPLE_CATALOG;
+    var ticket = [];
+    var mode = "VENTA";
+    var streamRef = null;
+    var scanLoopId = null;
+    var zxingReader = null;
+    var lastScanCode = "";
+    var lastScanTime = 0;
+    var autoScanTimer = null;
 
-    let isGeneratingSale = false;
-    let lastSaleSignature = "";
-    let lastSaleTimestamp = 0;
+    var isGeneratingSale = false;
+    var lastSaleSignature = "";
+    var lastSaleTimestamp = 0;
 
-    const el = (id) => document.getElementById(id);
+    function el(id) {
+      return document.getElementById(id);
+    }
 
-    function showToast(msg, isErr = false) {
-      const t = el("toast");
+    function showToast(msg, isErr) {
+      var t = el("toast");
       t.textContent = msg;
       t.style.borderColor = isErr ? "#ef4444" : "#10b981";
       t.style.display = "block";
       clearTimeout(t._timer);
-      t._timer = setTimeout(() => { t.style.display = "none"; }, 2800);
+      t._timer = setTimeout(function () { t.style.display = "none"; }, 2800);
     }
 
-    function playBeep(success = true) {
+    function playBeep(success) {
       if (!el("soundToggle").checked) return;
       try {
-        const AudioCtx = window.AudioContext || window.webkitAudioContext;
-        const ctx = new AudioCtx();
-        const osc = ctx.createOscillator();
-        const gain = ctx.createGain();
+        var AudioCtx = window.AudioContext || window.webkitAudioContext;
+        var ctx = new AudioCtx();
+        var osc = ctx.createOscillator();
+        var gain = ctx.createGain();
         osc.type = success ? "square" : "sawtooth";
         osc.frequency.setValueAtTime(success ? 1850 : 320, ctx.currentTime);
         gain.gain.setValueAtTime(0.08, ctx.currentTime);
@@ -678,165 +679,190 @@
     }
 
     function toggleSection(panelId, arrowId) {
-      const panel = el(panelId);
-      const arrow = el(arrowId);
-      const isOpen = panel.classList.toggle("open");
+      var panel = el(panelId);
+      var arrow = el(arrowId);
+      var isOpen = panel.classList.toggle("open");
       if (arrow) arrow.textContent = isOpen ? "▲" : "▼";
     }
 
-    function saveVendors(selectedName = null) {
-      if (!Array.isArray(vendors) || !vendors.length) vendors = [...DEFAULT_VENDORS];
+    function saveVendors(selectedName) {
+      if (!Array.isArray(vendors) || !vendors.length) vendors = DEFAULT_VENDORS.slice();
       localStorage.setItem("fa_vendors", JSON.stringify(vendors));
-      const sel = el("vendedorSelect");
-      const prev = selectedName || sel.value;
+      var sel = el("vendedorSelect");
+      var prev = selectedName || sel.value;
       sel.innerHTML = "";
-      vendors.forEach(v => {
-        const opt = document.createElement("option");
+      vendors.forEach(function (v) {
+        var opt = document.createElement("option");
         opt.value = v;
         opt.textContent = v;
         sel.appendChild(opt);
       });
-      if (prev && vendors.includes(prev)) {
+      if (prev && vendors.indexOf(prev) !== -1) {
         sel.value = prev;
       }
       renderVendorModalList();
     }
 
     function renderVendorModalList() {
-      const wrap = el("vendorList");
+      var wrap = el("vendorList");
       wrap.innerHTML = "";
-      vendors.forEach((v, idx) => {
-        const row = document.createElement("div");
+      vendors.forEach(function (v, idx) {
+        var row = document.createElement("div");
         row.className = "vendor-chip";
-        row.innerHTML = `
-          <span>${v}</span>
-          ${vendors.length > 1 ? <button type="button" class="btn-danger btn-sm" onclick="removeVendor(${idx})">Quitar</button> : ""}
-        `;
+        var btnHtml = vendors.length > 1
+          ? '<button type="button" class="btn-danger btn-sm" onclick="removeVendor(' + idx + ')">Quitar</button>'
+          : "";
+        row.innerHTML = "<span>" + v + "</span>" + btnHtml;
         wrap.appendChild(row);
       });
     }
 
-    window.removeVendor = (idx) => {
+    window.removeVendor = function (idx) {
       if (vendors.length <= 1) return;
       vendors.splice(idx, 1);
       saveVendors();
     };
 
-    async function addVendor() {
-      const name = el("newVendorName").value.trim();
+    function addVendor() {
+      var name = el("newVendorName").value.trim();
       if (!name) {
         showToast("Escribe el nombre del vendedor", true);
         return;
       }
-      if (!vendors.includes(name)) {
+      if (vendors.indexOf(name) === -1) {
         vendors.push(name);
       }
       el("newVendorName").value = "";
       saveVendors(name);
 
-      if (APPS_SCRIPT_URL && !APPS_SCRIPT_URL.includes("REEMPLAZA_CON_TU_URL")) {
-        try {
-          await fetch(APPS_SCRIPT_URL, {
-            method: "POST",
-            mode: "no-cors",
-            headers: { "Content-Type": "text/plain;charset=utf-8" },
-            body: JSON.stringify({ action: "add_vendor", vendor: name })
-          });
-          showToast(Vendedor guardado en Sheets: ${name});
-          return;
-        } catch (_) {}
+      if (APPS_SCRIPT_URL && APPS_SCRIPT_URL.indexOf("REEMPLAZA_CON_TU_URL") === -1) {
+        fetch(APPS_SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify({ action: "add_vendor", vendor: name })
+        }).then(function () {
+          showToast("Vendedor guardado en Sheets: " + name);
+        }).catch(function () {
+          showToast("Vendedor añadido: " + name);
+        });
+        return;
       }
-      showToast(Vendedor añadido: ${name});
+      showToast("Vendedor añadido: " + name);
     }
 
     function renderCatalog() {
-      const q = el("filterInput").value.trim().toLowerCase();
-      const filtered = catalog.filter(p =>
-        String(p.nombre || "").toLowerCase().includes(q) ||
-        String(p.sku || "").toLowerCase().includes(q)
-      );
-      el("catalogCount").textContent = ${catalog.length} ITEMS;
-      const list = el("productList");
+      var q = el("filterInput").value.trim().toLowerCase();
+      var filtered = catalog.filter(function (p) {
+        return String(p.nombre || "").toLowerCase().indexOf(q) !== -1 ||
+               String(p.sku || "").toLowerCase().indexOf(q) !== -1;
+      });
+      el("catalogCount").textContent = catalog.length + " ITEMS";
+      var list = el("productList");
       list.innerHTML = "";
-      filtered.slice(0, 120).forEach(p => {
-        const div = document.createElement("div");
+      filtered.slice(0, 120).forEach(function (p) {
+        var div = document.createElement("div");
         div.className = "prod-item";
-        div.innerHTML = `
-          <div>
-            <div class="prod-name">${p.nombre}</div>
-            <div class="prod-meta">SKU/Código: ${p.sku} · ${p.unidad || "und"}</div>
-          </div>
-          <div class="prod-price">${fmtMoney(p.precio)}</div>
-        `;
-        div.onclick = () => addProductToTicket(p, 1, true);
+        div.innerHTML =
+          "<div>" +
+            '<div class="prod-name">' + p.nombre + "</div>" +
+            '<div class="prod-meta">SKU/Codigo: ' + p.sku + " - " + (p.unidad || "und") + "</div>" +
+          "</div>" +
+          '<div class="prod-price">' + fmtMoney(p.precio) + "</div>";
+        div.onclick = function () { addProductToTicket(p, 1, true); };
         list.appendChild(div);
       });
     }
 
-    function addProductToTicket(prod, qty = 1, withSound = false) {
+    function addProductToTicket(prod, qty, withSound) {
       if (!prod) return;
-      const existing = ticket.find(i => i.sku === prod.sku);
+      var amount = qty || 1;
+      var existing = null;
+      for (var i = 0; i < ticket.length; i++) {
+        if (ticket[i].sku === prod.sku) {
+          existing = ticket[i];
+          break;
+        }
+      }
       if (existing) {
-        existing.cant += qty;
+        existing.cant += amount;
       } else {
         ticket.push({
           sku: prod.sku,
           nombre: prod.nombre,
           precio: Number(prod.precio) || 0,
           unidad: prod.unidad || "und",
-          cant: qty
+          cant: amount
         });
       }
       if (withSound) playBeep(true);
       renderTicket();
     }
 
-    function handleCodeLookup(rawCode, { silentNotFound = false, clearInputOnMatch = true } = {}) {
-      const code = String(rawCode || "").trim();
+    function handleCodeLookup(rawCode, opts) {
+      var options = opts || {};
+      var silentNotFound = !!options.silentNotFound;
+      var clearInputOnMatch = options.clearInputOnMatch !== false;
+      var code = String(rawCode || "").trim();
       if (!code) return false;
-      const now = Date.now();
+      var now = Date.now();
       if (code === lastScanCode && now - lastScanTime < 850) return false;
 
-      const exact = catalog.find(p => String(p.sku).trim().toLowerCase() === code.toLowerCase());
+      var exact = null;
+      for (var i = 0; i < catalog.length; i++) {
+        if (String(catalog[i].sku).trim().toLowerCase() === code.toLowerCase()) {
+          exact = catalog[i];
+          break;
+        }
+      }
       if (exact) {
         lastScanCode = code;
         lastScanTime = now;
         addProductToTicket(exact, 1, true);
-        showToast(Escaneado: ${exact.nombre} (${fmtMoney(exact.precio)}));
+        showToast("Escaneado: " + exact.nombre + " (" + fmtMoney(exact.precio) + ")");
         if (clearInputOnMatch) el("scanInput").value = "";
         return true;
       }
 
       if (!silentNotFound) {
-        const partial = catalog.find(p => String(p.nombre).toLowerCase().includes(code.toLowerCase()));
+        var partial = null;
+        for (var j = 0; j < catalog.length; j++) {
+          if (String(catalog[j].nombre).toLowerCase().indexOf(code.toLowerCase()) !== -1) {
+            partial = catalog[j];
+            break;
+          }
+        }
         if (partial) {
           lastScanCode = code;
           lastScanTime = now;
           addProductToTicket(partial, 1, true);
-          showToast(Agregado: ${partial.nombre} (${fmtMoney(partial.precio)}));
+          showToast("Agregado: " + partial.nombre + " (" + fmtMoney(partial.precio) + ")");
           if (clearInputOnMatch) el("scanInput").value = "";
           return true;
         }
         playBeep(false);
-        showToast(Código no encontrado: ${code}, true);
+        showToast("Codigo no encontrado: " + code, true);
       }
       return false;
     }
 
     function getTotals() {
-      const subtotal = ticket.reduce((acc, item) => acc + (Number(item.precio) || 0) * (Number(item.cant) || 0), 0);
-      const iva = mode === "PROFORMA" ? 0 : subtotal * IVA_RATE;
-      const total = subtotal + iva;
-      return { subtotal, iva, total };
+      var subtotal = ticket.reduce(function (acc, item) {
+        return acc + (Number(item.precio) || 0) * (Number(item.cant) || 0);
+      }, 0);
+      var iva = mode === "PROFORMA" ? 0 : subtotal * IVA_RATE;
+      var total = subtotal + iva;
+      return { subtotal: subtotal, iva: iva, total: total };
     }
 
     function updateChangeCalc() {
-      const { total } = getTotals();
-      const denom = el("denomLabel").value;
-      const rawVal = el("cashReceived").value;
-      const hasCash = rawVal !== "" && Number.isFinite(parseFloat(rawVal));
-      const received = hasCash ? parseFloat(rawVal) : 0;
-      const box = el("changeBox");
+      var totals = getTotals();
+      var total = totals.total;
+      var denom = el("denomLabel").value;
+      var rawVal = el("cashReceived").value;
+      var hasCash = rawVal !== "" && isFinite(parseFloat(rawVal));
+      var received = hasCash ? parseFloat(rawVal) : 0;
+      var box = el("changeBox");
 
       if (!denom && !hasCash) {
         box.classList.remove("due");
@@ -846,18 +872,18 @@
         return;
       }
 
-      const diff = received - total;
+      var diff = received - total;
       if (diff >= 0) {
         box.classList.remove("due");
         el("changeLabel").textContent = "CAMBIO / VUELTO A ENTREGAR";
         el("changeHint").textContent = denom
-          ? Recibido ${fmtMoney(received)} (${denom}) · Total ${fmtMoney(total)}
-          : Recibido ${fmtMoney(received)} · Total ${fmtMoney(total)};
+          ? "Recibido " + fmtMoney(received) + " (" + denom + ") - Total " + fmtMoney(total)
+          : "Recibido " + fmtMoney(received) + " - Total " + fmtMoney(total);
         el("changeVal").textContent = fmtMoney(diff);
       } else {
         box.classList.add("due");
         el("changeLabel").textContent = "FALTA POR COBRAR";
-        el("changeHint").textContent = Recibido ${fmtMoney(received)} de ${fmtMoney(total)};
+        el("changeHint").textContent = "Recibido " + fmtMoney(received) + " de " + fmtMoney(total);
         el("changeVal").textContent = fmtMoney(Math.abs(diff));
       }
     }
@@ -865,115 +891,119 @@
     function resetPaymentSelection() {
       el("cashReceived").value = "";
       el("denomLabel").value = "";
-      document.querySelectorAll(".bill-btn").forEach(b => b.classList.remove("selected"));
+      document.querySelectorAll(".bill-btn").forEach(function (b) { b.classList.remove("selected"); });
       updateChangeCalc();
     }
 
     function renderTicket() {
       el("ticketTitle").textContent = mode === "VENTA" ? "TICKET ACTUAL (VENTA)" : "TICKET ACTUAL (PROFORMA)";
-      const wrap = el("ticketItems");
+      var wrap = el("ticketItems");
       wrap.innerHTML = "";
       if (!ticket.length) {
-        wrap.innerHTML = <div class="prod-meta" style="text-align:center; padding:18px;">Escanea o selecciona productos para iniciar el ticket</div>;
+        wrap.innerHTML = '<div class="prod-meta" style="text-align:center; padding:18px;">Escanea o selecciona productos para iniciar el ticket</div>';
       } else {
-        ticket.forEach((item, idx) => {
-          const sub = item.cant * item.precio;
-          const row = document.createElement("div");
+        ticket.forEach(function (item, idx) {
+          var sub = item.cant * item.precio;
+          var row = document.createElement("div");
           row.className = "t-row";
-          row.innerHTML = `
-            <div>
-              <div class="prod-name">${item.nombre}</div>
-              <div class="prod-meta">${item.sku} · ${fmtMoney(item.precio)} / ${item.unidad}</div>
-            </div>
-            <div class="qty-box">
-              <button type="button" class="btn-sm" onclick="changeQty(${idx}, -1)">-</button>
-              <span>${item.cant}</span>
-              <button type="button" class="btn-sm" onclick="changeQty(${idx}, 1)">+</button>
-            </div>
-            <div style="text-align:right;">
-              <div style="font-weight:700;">${fmtMoney(sub)}</div>
-              <button type="button" class="btn-danger btn-sm" onclick="removeItem(${idx})">✕</button>
-            </div>
-          `;
+          row.innerHTML =
+            "<div>" +
+              '<div class="prod-name">' + item.nombre + "</div>" +
+              '<div class="prod-meta">' + item.sku + " - " + fmtMoney(item.precio) + " / " + item.unidad + "</div>" +
+            "</div>" +
+            '<div class="qty-box">' +
+              '<button type="button" class="btn-sm" onclick="changeQty(' + idx + ', -1)">-</button>' +
+              "<span>" + item.cant + "</span>" +
+              '<button type="button" class="btn-sm" onclick="changeQty(' + idx + ', 1)">+</button>' +
+            "</div>" +
+            '<div style="text-align:right;">' +
+              '<div style="font-weight:700;">' + fmtMoney(sub) + "</div>" +
+              '<button type="button" class="btn-danger btn-sm" onclick="removeItem(' + idx + ')">X</button>' +
+            "</div>";
           wrap.appendChild(row);
         });
       }
-      const { subtotal, iva, total } = getTotals();
-      el("subVal").textContent = fmtMoney(subtotal);
-      el("ivaVal").textContent = fmtMoney(iva);
-      el("totalVal").textContent = fmtMoney(total);
+      var totals = getTotals();
+      el("subVal").textContent = fmtMoney(totals.subtotal);
+      el("ivaVal").textContent = fmtMoney(totals.iva);
+      el("totalVal").textContent = fmtMoney(totals.total);
       updateChangeCalc();
     }
 
-    window.changeQty = (idx, delta) => {
+    window.changeQty = function (idx, delta) {
       if (!ticket[idx]) return;
       ticket[idx].cant += delta;
       if (ticket[idx].cant <= 0) ticket.splice(idx, 1);
       renderTicket();
     };
 
-    window.removeItem = (idx) => {
+    window.removeItem = function (idx) {
       ticket.splice(idx, 1);
       renderTicket();
     };
 
-    async function syncCatalog() {
-      if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes("REEMPLAZA_CON_TU_URL")) {
+    function syncCatalog() {
+      if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf("REEMPLAZA_CON_TU_URL") !== -1) {
         el("connBadge").textContent = "Modo Local";
         el("connBadge").classList.remove("ok");
         renderCatalog();
-        showToast("Usando catálogo local de prueba");
+        showToast("Usando catalogo local de prueba");
         return;
       }
-      try {
-        el("btnSync").textContent = "Sincronizando...";
-        const res = await fetch(${APPS_SCRIPT_URL}?t=${Date.now()}, { cache: "no-store" });
-        const data = await res.json();
-        if (Array.isArray(data.items) && data.items.length > 0) {
-          catalog = data.items;
-          localStorage.setItem("fa_catalog", JSON.stringify(catalog));
-          el("connBadge").textContent = "Sheets Conectado";
-          el("connBadge").classList.add("ok");
-          renderCatalog();
-        }
-        if (Array.isArray(data.vendors) && data.vendors.length > 0) {
-          vendors = data.vendors;
-          saveVendors();
-        }
-        showToast("Catálogo y vendedores actualizados");
-      } catch (err) {
-        showToast("Error al sincronizar con Sheets", true);
-      } finally {
-        el("btnSync").textContent = "Sincronizar";
-      }
+      el("btnSync").textContent = "Sincronizando...";
+      fetch(APPS_SCRIPT_URL + "?t=" + Date.now(), { cache: "no-store" })
+        .then(function (res) { return res.json(); })
+        .then(function (data) {
+          if (Array.isArray(data.items) && data.items.length > 0) {
+            catalog = data.items;
+            localStorage.setItem("fa_catalog", JSON.stringify(catalog));
+            el("connBadge").textContent = "Sheets Conectado";
+            el("connBadge").classList.add("ok");
+            renderCatalog();
+          }
+          if (Array.isArray(data.vendors) && data.vendors.length > 0) {
+            vendors = data.vendors;
+            saveVendors();
+          }
+          showToast("Catalogo y vendedores actualizados");
+        })
+        .catch(function () {
+          showToast("Error al sincronizar con Sheets", true);
+        })
+        .finally(function () {
+          el("btnSync").textContent = "Sincronizar";
+        });
     }
 
-    async function generateSale() {
+    function generateSale() {
       if (isGeneratingSale) return;
       if (!ticket.length) {
         showToast("Agrega al menos un producto al ticket", true);
         return;
       }
 
-      const { subtotal, iva, total } = getTotals();
-      const metodo = el("payMethod").value;
-      const denom = el("denomLabel").value || "No especificado";
-      const recibidoInput = parseFloat(el("cashReceived").value);
-      const efectivoRecibido = Number.isFinite(recibidoInput) && recibidoInput > 0 ? recibidoInput : total;
-      const cambio = Math.max(0, efectivoRecibido - total);
+      var totals = getTotals();
+      var subtotal = totals.subtotal;
+      var iva = totals.iva;
+      var total = totals.total;
+      var metodo = el("payMethod").value;
+      var denom = el("denomLabel").value || "No especificado";
+      var recibidoInput = parseFloat(el("cashReceived").value);
+      var efectivoRecibido = isFinite(recibidoInput) && recibidoInput > 0 ? recibidoInput : total;
+      var cambio = Math.max(0, efectivoRecibido - total);
 
       if (mode === "VENTA" && metodo === "Efectivo" && efectivoRecibido < total) {
-        showToast(Faltan ${fmtMoney(total - efectivoRecibido)} para completar el pago, true);
+        showToast("Faltan " + fmtMoney(total - efectivoRecibido) + " para completar el pago", true);
         return;
       }
 
-      const signature = JSON.stringify({
+      var signature = JSON.stringify({
         vendedor: el("vendedorSelect").value,
         modo: mode,
         total: total.toFixed(2),
-        items: ticket.map(i => ${i.sku}:${i.cant})
+        items: ticket.map(function (i) { return i.sku + ":" + i.cant; })
       });
-      const now = Date.now();
+      var now = Date.now();
       if (signature === lastSaleSignature && now - lastSaleTimestamp < 4000) {
         showToast("Venta ya generada hace un momento; evita repetirla", true);
         return;
@@ -983,8 +1013,8 @@
       el("btnGenerateSale").disabled = true;
       el("btnGenerateSale").textContent = "Generando...";
 
-      const idVenta = "V-" + now.toString().slice(-6);
-      const payload = {
+      var idVenta = "V-" + String(now).slice(-6);
+      var payload = {
         id_venta: idVenta,
         caja: el("cajaSelect").value,
         vendedor: el("vendedorSelect").value,
@@ -997,93 +1027,96 @@
         total: Number(total.toFixed(2)),
         efectivo_recibido: Number(efectivoRecibido.toFixed(2)),
         cambio: Number(cambio.toFixed(2)),
-        items: ticket.map(i => ({
-          sku: i.sku,
-          nombre: i.nombre,
-          cant: i.cant,
-          precio: Number(i.precio),
-          subtotal: Number((i.cant * i.precio).toFixed(2))
-        }))
+        items: ticket.map(function (i) {
+          return {
+            sku: i.sku,
+            nombre: i.nombre,
+            cant: i.cant,
+            precio: Number(i.precio),
+            subtotal: Number((i.cant * i.precio).toFixed(2))
+          };
+        })
       };
 
-      const finishSaleUI = (msg, isErr = false) => {
+      function finishSaleUI(msg, isErr) {
         lastSaleSignature = signature;
         lastSaleTimestamp = Date.now();
         playBeep(!isErr);
-        showToast(msg, isErr);
+        showToast(msg, !!isErr);
         if (!isErr) {
           ticket = [];
           resetPaymentSelection();
           renderTicket();
         }
-        setTimeout(() => {
+        setTimeout(function () {
           isGeneratingSale = false;
           el("btnGenerateSale").disabled = false;
           el("btnGenerateSale").textContent = "Generar Venta";
         }, 1200);
-      };
+      }
 
-      if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes("REEMPLAZA_CON_TU_URL")) {
-        finishSaleUI(Venta ${idVenta} generada · Cambio: ${fmtMoney(cambio)} (Modo Local));
+      if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf("REEMPLAZA_CON_TU_URL") !== -1) {
+        finishSaleUI("Venta " + idVenta + " generada - Cambio: " + fmtMoney(cambio) + " (Modo Local)", false);
         return;
       }
 
-      try {
-        await fetch(APPS_SCRIPT_URL, {
-          method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify(payload)
-        });
-        finishSaleUI(Venta ${idVenta} generada · Cambio: ${fmtMoney(cambio)});
-      } catch (err) {
+      fetch(APPS_SCRIPT_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain;charset=utf-8" },
+        body: JSON.stringify(payload)
+      }).then(function () {
+        finishSaleUI("Venta " + idVenta + " generada - Cambio: " + fmtMoney(cambio), false);
+      }).catch(function () {
         isGeneratingSale = false;
         el("btnGenerateSale").disabled = false;
         el("btnGenerateSale").textContent = "Generar Venta";
         playBeep(false);
         showToast("Error al generar la venta", true);
-      }
+      });
     }
 
-    async function startCameraScanner() {
+    function startCameraScanner() {
       el("scannerBox").style.display = "block";
-      el("scannerStatus").textContent = "Iniciando cámara...";
-      try {
-        if ("BarcodeDetector" in window) {
-          streamRef = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: { ideal: "environment" } }
-          });
-          const video = el("scannerVideo");
-          video.srcObject = streamRef;
-          await video.play();
-          const detector = new BarcodeDetector({
-            formats: ["qr_code", "ean_13", "ean_8", "code_128", "code_39", "upc_a", "upc_e"]
-          });
-          el("scannerStatus").textContent = "Escaneo automático activo: enfoca código o QR";
-          const tick = async () => {
-            if (!streamRef) return;
-            try {
-              const codes = await detector.detect(video);
-              if (codes && codes.length > 0 && codes[0].rawValue) {
-                handleCodeLookup(codes[0].rawValue, { silentNotFound: false, clearInputOnMatch: false });
+      el("scannerStatus").textContent = "Iniciando camara...";
+      if ("BarcodeDetector" in window && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } })
+          .then(function (stream) {
+            streamRef = stream;
+            var video = el("scannerVideo");
+            video.srcObject = stream;
+            return video.play().then(function () {
+              var detector = new BarcodeDetector({
+                formats: ["qr_code", "ean_13", "ean_8", "code_128", "code_39", "upc_a", "upc_e"]
+              });
+              el("scannerStatus").textContent = "Escaneo automatico activo: enfoca codigo o QR";
+              function tick() {
+                if (!streamRef) return;
+                detector.detect(video).then(function (codes) {
+                  if (codes && codes.length > 0 && codes[0].rawValue) {
+                    handleCodeLookup(codes[0].rawValue, { silentNotFound: false, clearInputOnMatch: false });
+                  }
+                }).catch(function () {});
+                scanLoopId = requestAnimationFrame(tick);
               }
-            } catch (_) {}
-            scanLoopId = requestAnimationFrame(tick);
-          };
-          scanLoopId = requestAnimationFrame(tick);
-        } else if (window.ZXing) {
-          zxingReader = new ZXing.BrowserMultiFormatReader();
-          el("scannerStatus").textContent = "Escaneo automático con ZXing...";
-          await zxingReader.decodeFromVideoDevice(null, "scannerVideo", (result) => {
-            if (result && result.getText()) {
-              handleCodeLookup(result.getText(), { silentNotFound: false, clearInputOnMatch: false });
-            }
+              scanLoopId = requestAnimationFrame(tick);
+            });
+          })
+          .catch(function () {
+            el("scannerStatus").textContent = "Permiso de camara denegado o no disponible.";
           });
-        } else {
-          el("scannerStatus").textContent = "Usa pistola lectora o escribe el código.";
-        }
-      } catch (err) {
-        el("scannerStatus").textContent = "Permiso de cámara denegado o no disponible.";
+      } else if (window.ZXing) {
+        zxingReader = new ZXing.BrowserMultiFormatReader();
+        el("scannerStatus").textContent = "Escaneo automatico con ZXing...";
+        zxingReader.decodeFromVideoDevice(null, "scannerVideo", function (result) {
+          if (result && result.getText()) {
+            handleCodeLookup(result.getText(), { silentNotFound: false, clearInputOnMatch: false });
+          }
+        }).catch(function () {
+          el("scannerStatus").textContent = "No se pudo iniciar la camara.";
+        });
+      } else {
+        el("scannerStatus").textContent = "Usa pistola lectora o escribe el codigo.";
       }
     }
 
@@ -1091,7 +1124,7 @@
       if (scanLoopId) cancelAnimationFrame(scanLoopId);
       scanLoopId = null;
       if (streamRef) {
-        streamRef.getTracks().forEach(t => t.stop());
+        streamRef.getTracks().forEach(function (t) { t.stop(); });
         streamRef = null;
       }
       if (zxingReader) {
@@ -1101,77 +1134,79 @@
       el("scannerBox").style.display = "none";
     }
 
-    el("btnToggleTopPanel").onclick = () => {
-      const open = el("topCollapsible").classList.toggle("open");
+    el("btnToggleTopPanel").onclick = function () {
+      var open = el("topCollapsible").classList.toggle("open");
       el("btnToggleTopPanel").textContent = open ? "▲ Caja / Vendedor / Sync" : "▼ Caja / Vendedor / Sync";
     };
-    el("btnToggleCatalog").onclick = () => toggleSection("catalogCollapsible", "catalogArrow");
-    el("btnToggleBills").onclick = () => toggleSection("billsCollapsible", "billsArrow");
+    el("btnToggleCatalog").onclick = function () { toggleSection("catalogCollapsible", "catalogArrow"); };
+    el("btnToggleBills").onclick = function () { toggleSection("billsCollapsible", "billsArrow"); };
 
-    el("btnOpenVendorModal").onclick = () => {
+    el("btnOpenVendorModal").onclick = function () {
       renderVendorModalList();
       el("vendorModal").classList.add("open");
       el("newVendorName").focus();
     };
-    el("btnCloseVendorModal").onclick = () => el("vendorModal").classList.remove("open");
+    el("btnCloseVendorModal").onclick = function () { el("vendorModal").classList.remove("open"); };
     el("btnAddVendor").onclick = addVendor;
-    el("newVendorName").addEventListener("keydown", (e) => {
+    el("newVendorName").addEventListener("keydown", function (e) {
       if (e.key === "Enter") {
         e.preventDefault();
         addVendor();
       }
     });
 
-    el("modeVenta").onclick = () => {
+    el("modeVenta").onclick = function () {
       mode = "VENTA";
       el("modeVenta").classList.add("active");
       el("modeProforma").classList.remove("active");
       renderTicket();
     };
-    el("modeProforma").onclick = () => {
+    el("modeProforma").onclick = function () {
       mode = "PROFORMA";
       el("modeProforma").classList.add("active");
       el("modeVenta").classList.remove("active");
       renderTicket();
     };
 
-    el("scanInput").addEventListener("input", () => {
+    el("scanInput").addEventListener("input", function () {
       clearTimeout(autoScanTimer);
-      const val = el("scanInput").value.trim();
+      var val = el("scanInput").value.trim();
       if (!val) return;
       if (handleCodeLookup(val, { silentNotFound: true, clearInputOnMatch: true })) return;
-      autoScanTimer = setTimeout(() => {
+      autoScanTimer = setTimeout(function () {
         handleCodeLookup(el("scanInput").value, { silentNotFound: true, clearInputOnMatch: true });
       }, 140);
     });
 
-    el("btnAddScan").onclick = () => handleCodeLookup(el("scanInput").value, { silentNotFound: false, clearInputOnMatch: true });
-    el("scanInput").addEventListener("keydown", (e) => {
+    el("btnAddScan").onclick = function () {
+      handleCodeLookup(el("scanInput").value, { silentNotFound: false, clearInputOnMatch: true });
+    };
+    el("scanInput").addEventListener("keydown", function (e) {
       if (e.key === "Enter") {
         e.preventDefault();
         handleCodeLookup(el("scanInput").value, { silentNotFound: false, clearInputOnMatch: true });
       }
     });
 
-    el("btnSimScan").onclick = () => {
+    el("btnSimScan").onclick = function () {
       if (!catalog.length) return;
-      const sample = catalog[Math.floor(Math.random() * Math.min(catalog.length, 15))];
+      var sample = catalog[Math.floor(Math.random() * Math.min(catalog.length, 15))];
       addProductToTicket(sample, 1, true);
-      showToast(Simulado: ${sample.nombre});
+      showToast("Simulado: " + sample.nombre);
     };
     el("btnCamera").onclick = startCameraScanner;
     el("btnStopCam").onclick = stopCameraScanner;
     el("filterInput").oninput = renderCatalog;
     el("btnSync").onclick = syncCatalog;
-    el("btnClearTicket").onclick = () => {
+    el("btnClearTicket").onclick = function () {
       ticket = [];
       resetPaymentSelection();
       renderTicket();
     };
     el("btnGenerateSale").onclick = generateSale;
-    el("btnPrint").onclick = () => window.print();
+    el("btnPrint").onclick = function () { window.print(); };
 
-    el("cashReceived").oninput = () => {
+    el("cashReceived").oninput = function () {
       if (el("cashReceived").value !== "" && !el("denomLabel").value) {
         el("denomLabel").value = "Personalizado";
       }
@@ -1180,13 +1215,13 @@
     el("denomLabel").onchange = updateChangeCalc;
     el("payMethod").onchange = updateChangeCalc;
 
-    document.querySelectorAll(".bill-btn").forEach(btn => {
-      btn.onclick = () => {
-        document.querySelectorAll(".bill-btn").forEach(b => b.classList.remove("selected"));
+    document.querySelectorAll(".bill-btn").forEach(function (btn) {
+      btn.onclick = function () {
+        document.querySelectorAll(".bill-btn").forEach(function (b) { b.classList.remove("selected"); });
         btn.classList.add("selected");
-        const { total } = getTotals();
+        var totals = getTotals();
         if (btn.id === "btnExact") {
-          el("cashReceived").value = total.toFixed(2);
+          el("cashReceived").value = totals.total.toFixed(2);
           el("denomLabel").value = "Exacto";
         } else if (btn.dataset.amt) {
           el("cashReceived").value = parseFloat(btn.dataset.amt).toFixed(2);
