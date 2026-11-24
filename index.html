@@ -515,7 +515,8 @@
 
     let audioCtx = null;
 
-    function reproducirBeepEscaneo(tipo = "ok") {
+    function reproducirBeepEscaneo(tipo) {
+      if (tipo === undefined) tipo = "ok";
       try {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
         if (!AudioContextClass) return;
@@ -543,14 +544,18 @@
       el.textContent = msg;
       el.classList.remove("hidden");
       clearTimeout(mostrarToast._timer);
-      mostrarToast._timer = setTimeout(() => el.classList.add("hidden"), 2200);
+      mostrarToast._timer = setTimeout(function() {
+        el.classList.add("hidden");
+      }, 2200);
     }
 
     function initSeller() {
       const saved = localStorage.getItem(CONFIG.STORAGE_SELLER_KEY);
       const select = document.getElementById("sellerSelect");
       if (saved) {
-        const exists = Array.from(select.options).some((o) => o.value === saved);
+        const exists = Array.from(select.options).some(function(o) {
+          return o.value === saved;
+        });
         if (!exists) {
           const opt = document.createElement("option");
           opt.value = saved;
@@ -560,7 +565,7 @@
         select.value = saved;
         state.vendedor = saved;
       }
-      select.addEventListener("change", () => {
+      select.addEventListener("change", function() {
         state.vendedor = select.value;
         localStorage.setItem(CONFIG.STORAGE_SELLER_KEY, state.vendedor);
         mostrarToast("Vendedor: " + state.vendedor);
@@ -579,57 +584,71 @@
 
     function renderCatalogos() {
       const term = (document.getElementById("searchInput").value || "").trim().toLowerCase();
-      const filtered = state.catalogo.filter(
-        (p) =>
-          p.nombre.toLowerCase().includes(term) ||
-          p.sku.toLowerCase().includes(term)
-      );
+      const filtered = state.catalogo.filter(function(p) {
+        return p.nombre.toLowerCase().includes(term) || p.sku.toLowerCase().includes(term);
+      });
 
       document.getElementById("catalogCountBadge").textContent = state.catalogo.length + " items";
       document.getElementById("navCatCount").textContent = state.catalogo.length;
 
       const quickList = document.getElementById("quickList");
-      quickList.innerHTML = filtered
+      const quickHtml = filtered
         .slice(0, 25)
-        .map(
-          (p) => `
-          <div class="quick-item" onclick="agregarProductoPorSku('${p.sku.replace(/'/g, "\\'")}')">
-            <div>
-              <div class="item-name">${p.nombre}</div>
-              <div class="item-meta">SKU: ${p.sku} · ${p.unidad || "und"}</div>
-            </div>
-            <div class="item-price">$${Number(p.precio || 0).toFixed(2)}</div>
-          </div>`
-        )
-        .join("") || <div class="item-meta">No hay productos que coincidan con "${term}".</div>;
+        .map(function(p) {
+          const skuEsc = p.sku.replace(/'/g, "\\'");
+          const und = p.unidad || "und";
+          const precio = Number(p.precio || 0).toFixed(2);
+          return (
+            "<div class=\"quick-item\" onclick=\"agregarProductoPorSku('" + skuEsc + "')\">" +
+              "<div>" +
+                "<div class=\"item-name\">" + p.nombre + "</div>" +
+                "<div class=\"item-meta\">SKU: " + p.sku + " · " + und + "</div>" +
+              "</div>" +
+              "<div class=\"item-price\">$" + precio + "</div>" +
+            "</div>"
+          );
+        })
+        .join("");
+
+      quickList.innerHTML =
+        quickHtml ||
+        "<div class=\"item-meta\">No hay productos que coincidan con \"" + term + "\".</div>";
 
       const fullCatalogList = document.getElementById("fullCatalogList");
       fullCatalogList.innerHTML = state.catalogo
-        .map(
-          (p) => `
-          <div class="quick-item">
-            <div>
-              <div class="item-name">${p.nombre}</div>
-              <div class="item-meta">SKU: ${p.sku} · Unidad: ${p.unidad || "und"}</div>
-            </div>
-            <div style="display:flex;align-items:center;gap:10px;">
-              <span class="item-price">$${Number(p.precio || 0).toFixed(2)}</span>
-              <button class="btn-green" type="button" onclick="agregarProductoPorSku('${p.sku.replace(/'/g, "\\'")}')">+ Ticket</button>
-            </div>
-          </div>`
-        )
+        .map(function(p) {
+          const skuEsc = p.sku.replace(/'/g, "\\'");
+          const und = p.unidad || "und";
+          const precio = Number(p.precio || 0).toFixed(2);
+          return (
+            "<div class=\"quick-item\">" +
+              "<div>" +
+                "<div class=\"item-name\">" + p.nombre + "</div>" +
+                "<div class=\"item-meta\">SKU: " + p.sku + " · Unidad: " + und + "</div>" +
+              "</div>" +
+              "<div style=\"display:flex;align-items:center;gap:10px;\">" +
+                "<span class=\"item-price\">$" + precio + "</span>" +
+                "<button class=\"btn-green\" type=\"button\" onclick=\"agregarProductoPorSku('" + skuEsc + "')\">+ Ticket</button>" +
+              "</div>" +
+            "</div>"
+          );
+        })
         .join("");
     }
 
     function agregarProductoPorSku(sku) {
-      const prod = state.catalogo.find((p) => p.sku.toLowerCase() === String(sku).toLowerCase());
+      const prod = state.catalogo.find(function(p) {
+        return p.sku.toLowerCase() === String(sku).toLowerCase();
+      });
       if (!prod) {
         reproducirBeepEscaneo("err");
         mostrarToast("Producto no encontrado: " + sku);
         return;
       }
 
-      const existente = state.ticket.find((item) => item.sku === prod.sku);
+      const existente = state.ticket.find(function(item) {
+        return item.sku === prod.sku;
+      });
       if (existente) {
         existente.cantidad += 1;
       } else {
@@ -652,7 +671,9 @@
       const query = (input.value || "").trim();
       if (!query) return;
 
-      const exactSku = state.catalogo.find((p) => p.sku.toLowerCase() === query.toLowerCase());
+      const exactSku = state.catalogo.find(function(p) {
+        return p.sku.toLowerCase() === query.toLowerCase();
+      });
       if (exactSku) {
         agregarProductoPorSku(exactSku.sku);
         input.value = "";
@@ -660,11 +681,9 @@
         return;
       }
 
-      const match = state.catalogo.find(
-        (p) =>
-          p.nombre.toLowerCase().includes(query.toLowerCase()) ||
-          p.sku.toLowerCase().includes(query.toLowerCase())
-      );
+      const match = state.catalogo.find(function(p) {
+        return p.nombre.toLowerCase().includes(query.toLowerCase()) || p.sku.toLowerCase().includes(query.toLowerCase());
+      });
 
       if (match) {
         agregarProductoPorSku(match.sku);
@@ -702,28 +721,32 @@
     function renderTicket() {
       const container = document.getElementById("ticketItems");
       if (!state.ticket.length) {
-        container.innerHTML = <div class="item-meta">El ticket está vacío. Agrega o escanea un producto.</div>;
+        container.innerHTML = "<div class=\"item-meta\">El ticket está vacío. Agrega o escanea un producto.</div>";
       } else {
         container.innerHTML = state.ticket
-          .map(
-            (item, idx) => `
-            <div class="ticket-row">
-              <div>
-                <div class="item-name">${item.nombre}</div>
-                <div class="item-meta">${item.sku} · $${item.precio.toFixed(2)} / ${item.unidad}</div>
-              </div>
-              <div class="qty-controls">
-                <button class="qty-btn" type="button" onclick="cambiarCantidad(${idx}, -1)">-</button>
-                <span class="qty-val">${item.cantidad}</span>
-                <button class="qty-btn" type="button" onclick="cambiarCantidad(${idx}, 1)">+</button>
-                <span class="item-price" style="margin-left:4px;">$${(item.precio * item.cantidad).toFixed(2)}</span>
-              </div>
-            </div>`
-          )
+          .map(function(item, idx) {
+            const lineTotal = (item.precio * item.cantidad).toFixed(2);
+            return (
+              "<div class=\"ticket-row\">" +
+                "<div>" +
+                  "<div class=\"item-name\">" + item.nombre + "</div>" +
+                  "<div class=\"item-meta\">" + item.sku + " · $" + item.precio.toFixed(2) + " / " + item.unidad + "</div>" +
+                "</div>" +
+                "<div class=\"qty-controls\">" +
+                  "<button class=\"qty-btn\" type=\"button\" onclick=\"cambiarCantidad(" + idx + ", -1)\">-</button>" +
+                  "<span class=\"qty-val\">" + item.cantidad + "</span>" +
+                  "<button class=\"qty-btn\" type=\"button\" onclick=\"cambiarCantidad(" + idx + ", 1)\">+</button>" +
+                  "<span class=\"item-price\" style=\"margin-left:4px;\">$" + lineTotal + "</span>" +
+                "</div>" +
+              "</div>"
+            );
+          })
           .join("");
       }
 
-      const subtotal = state.ticket.reduce((acc, item) => acc + item.precio * item.cantidad, 0);
+      const subtotal = state.ticket.reduce(function(acc, item) {
+        return acc + item.precio * item.cantidad;
+      }, 0);
       const iva = subtotal * CONFIG.IVA_RATE;
       const total = subtotal + iva;
 
@@ -738,28 +761,37 @@
         return;
       }
 
-      const subtotal = state.ticket.reduce((acc, item) => acc + item.precio * item.cantidad, 0);
+      const subtotal = state.ticket.reduce(function(acc, item) {
+        return acc + item.precio * item.cantidad;
+      }, 0);
       const iva = subtotal * CONFIG.IVA_RATE;
       const total = subtotal + iva;
 
+      const detalleItems = state.ticket.map(function(i) {
+        const subItem = (i.cantidad * i.precio).toFixed(2);
+        return i.cantidad + " x " + i.nombre + " ($" + i.precio.toFixed(2) + ") = $" + subItem;
+      });
+
       const lineas = [
-        FERREAcosta - ${state.modo},
-        Vendedor: ${state.vendedor},
-        Fecha: ${new Date().toLocaleString("es-EC")},
+        "FERREAcosta - " + state.modo,
+        "Vendedor: " + state.vendedor,
+        "Fecha: " + new Date().toLocaleString("es-EC"),
         "------------------------",
-        ...state.ticket.map(
-          (i) => ${i.cantidad} x ${i.nombre} ($${i.precio.toFixed(2)}) = $${(i.cantidad * i.precio).toFixed(2)}
-        ),
+        ...detalleItems,
         "------------------------",
-        Subtotal: $${subtotal.toFixed(2)},
-        IVA (15%): $${iva.toFixed(2)},
-        TOTAL: $${total.toFixed(2)}
+        "Subtotal: $" + subtotal.toFixed(2),
+        "IVA (15%): $" + iva.toFixed(2),
+        "TOTAL: $" + total.toFixed(2)
       ];
 
       const texto = lineas.join("\n");
       navigator.clipboard?.writeText(texto).then(
-        () => mostrarToast("Resumen copiado al portapapeles"),
-        () => mostrarToast("No se pudo copiar automáticamente")
+        function() {
+          mostrarToast("Resumen copiado al portapapeles");
+        },
+        function() {
+          mostrarToast("No se pudo copiar automáticamente");
+        }
       );
     }
 
@@ -774,7 +806,9 @@
         return;
       }
 
-      const subtotal = state.ticket.reduce((acc, item) => acc + item.precio * item.cantidad, 0);
+      const subtotal = state.ticket.reduce(function(acc, item) {
+        return acc + item.precio * item.cantidad;
+      }, 0);
       const iva = subtotal * CONFIG.IVA_RATE;
       const total = subtotal + iva;
 
@@ -788,12 +822,12 @@
             vendedor: state.vendedor,
             fecha: new Date().toISOString(),
             items: state.ticket,
-            subtotal,
-            iva,
-            total
+            subtotal: subtotal,
+            iva: iva,
+            total: total
           })
         });
-        mostrarToast(${state.modo} enviada a Sheets);
+        mostrarToast(state.modo + " enviada a Sheets");
       } catch (err) {
         mostrarToast("Error al enviar a Sheets");
       }
@@ -835,7 +869,7 @@
       const viewTicket = document.getElementById("viewTicket");
       const viewCat = document.getElementById("viewCatalogo");
 
-      navCaja.addEventListener("click", () => {
+      navCaja.addEventListener("click", function() {
         navCaja.classList.add("active");
         navCat.classList.remove("active");
         viewCaja.classList.remove("hidden");
@@ -843,7 +877,7 @@
         viewCat.classList.add("hidden");
       });
 
-      navCat.addEventListener("click", () => {
+      navCat.addEventListener("click", function() {
         navCat.classList.add("active");
         navCaja.classList.remove("active");
         viewCaja.classList.add("hidden");
@@ -853,8 +887,12 @@
     }
 
     function initEvents() {
-      document.getElementById("modeVentaBtn").addEventListener("click", () => setModo("VENTA"));
-      document.getElementById("modeProformaBtn").addEventListener("click", () => setModo("PROFORMA"));
+      document.getElementById("modeVentaBtn").addEventListener("click", function() {
+        setModo("VENTA");
+      });
+      document.getElementById("modeProformaBtn").addEventListener("click", function() {
+        setModo("PROFORMA");
+      });
       document.getElementById("addScanBtn").addEventListener("click", buscarYAgregar);
       document.getElementById("simScanBtn").addEventListener("click", simularEscaneo);
       document.getElementById("clearTicketBtn").addEventListener("click", limpiarTicket);
@@ -863,7 +901,7 @@
       document.getElementById("syncBtn").addEventListener("click", sincronizarCatalogo);
       document.getElementById("searchInput").addEventListener("input", renderCatalogos);
 
-      document.getElementById("scanInput").addEventListener("keydown", (e) => {
+      document.getElementById("scanInput").addEventListener("keydown", function(e) {
         if (e.key === "Enter") {
           e.preventDefault();
           buscarYAgregar();
