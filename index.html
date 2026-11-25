@@ -324,9 +324,15 @@
       cursor: pointer;
     }
     .prod-item:hover { border-color: var(--accent); }
+    .prod-item.out-stock {
+      border-color: rgba(239, 68, 68, 0.55);
+      opacity: 0.78;
+    }
     .prod-name { font-weight: 600; font-size: 0.9rem; word-break: break-word; }
     .prod-meta { font-size: 0.76rem; color: var(--muted); margin-top: 2px; }
     .prod-price { font-weight: 700; font-size: 0.98rem; color: #34d399; white-space: nowrap; }
+    .stock-pill { font-weight: 700; color: #6ee7b7; }
+    .stock-pill.low { color: #fca5a5; }
 
     .ticket-items {
       max-height: 230px;
@@ -665,21 +671,21 @@
   <div id="toast" class="toast"></div>
 
   <script>
-    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby6njXNH-BxZuqDGoZqg5iEw9lDNeR9AhopRtb5SPHgze_Fw6Vgq5jZ3tbC65L8QQKl/exec";
+    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx4wlkYJ67IEJjBaPdjZuDEkgB3WWoFtzLGB3Bm7AiEQ5HPIDVNwLW0XiGQECKCHQDr/exec";
     var IVA_RATE = 0.15;
-    // true: suma IVA_RATE a precios que vienen sin IVA para mostrar precio final con IVA
-    // false: si el precio del producto ya viene con IVA incluido desde origen
+    // false: si el precio ya viene con IVA incluido desde origen (ej. $0.30)
+    // true: si el precio viene sin IVA y quieres sumarle IVA_RATE
     var APLICAR_IVA_A_PRECIOS = false;
     var SCAN_COOLDOWN_MS = 1800;
 
     var DEFAULT_VENDORS = ["Vendedor 1", "Vendedor 2", "Vendedor 3"];
     var SAMPLE_CATALOG = [
-      { sku: "FER-001", nombre: "Disco de corte metal 4-1/2\"", precio: 1.50, unidad: "und" },
-      { sku: "FER-002", nombre: "Cable flexible #14 AWG negro", precio: 0.65, unidad: "m" },
-      { sku: "FER-003", nombre: "Cinta aislante negra 3/4\"", precio: 1.10, unidad: "und" },
-      { sku: "FER-004", nombre: "Tornillo drywall 6x1\" caja x100", precio: 2.80, unidad: "caja" },
-      { sku: "FER-005", nombre: "Silicona transparente 42.5ml", precio: 1.50, unidad: "und" },
-      { sku: "FER-006", nombre: "Interruptor sencillo 3V blanco", precio: 2.75, unidad: "und" }
+      { sku: "FER-001", nombre: "Disco de corte metal 4-1/2\"", precio: 1.50, unidad: "und", stock: 25 },
+      { sku: "FER-002", nombre: "Cable flexible #14 AWG negro", precio: 0.65, unidad: "m", stock: 120 },
+      { sku: "FER-003", nombre: "Cinta aislante negra 3/4\"", precio: 1.10, unidad: "und", stock: 0 },
+      { sku: "FER-004", nombre: "Tornillo drywall 6x1\" caja x100", precio: 2.80, unidad: "caja", stock: 14 },
+      { sku: "FER-005", nombre: "Silicona transparente 42.5ml", precio: 1.50, unidad: "und", stock: 8 },
+      { sku: "FER-006", nombre: "Interruptor sencillo 3V blanco", precio: 2.75, unidad: "und", stock: 6 }
     ];
 
     var vendors = JSON.parse(localStorage.getItem("fa_vendors") || "null") || DEFAULT_VENDORS;
@@ -727,6 +733,17 @@
         osc.start();
         osc.stop(ctx.currentTime + (success ? 0.11 : 0.22));
       } catch (_) {}
+    }
+
+    function warnOutOfStock(msg) {
+      playBeep(false);
+      showToast(msg, true);
+    }
+
+    function getStockQty(prod) {
+      if (!prod || prod.stock === undefined || prod.stock === null || prod.stock === "") return null;
+      var n = Number(prod.stock);
+      return isFinite(n) ? n : null;
     }
 
     function flashScannerHit(labelText) {
@@ -844,12 +861,18 @@
       list.innerHTML = "";
       filtered.slice(0, 120).forEach(function (p) {
         var unitFinal = getUnitPrice(p);
+        var stk = getStockQty(p);
+        var isEmpty = stk !== null && stk <= 0;
+        var stockText = stk !== null
+          ? (isEmpty ? "SIN STOCK (0 " + (p.unidad || "und") + ")" : "Stock: " + stk + " " + (p.unidad || "und"))
+          : (p.unidad || "und");
+
         var div = document.createElement("div");
-        div.className = "prod-item";
+        div.className = "prod-item" + (isEmpty ? " out-stock" : "");
         div.innerHTML =
           "<div>" +
             '<div class="prod-name">' + p.nombre + "</div>" +
-            '<div class="prod-meta">SKU/Codigo: ' + p.sku + " - " + (p.unidad || "und") + " (IVA incl.)</div>" +
+            '<div class="prod-meta">SKU: ' + p.sku + ' - <span class="stock-pill' + (isEmpty ? " low" : "") + '">' + stockText + "</span></div>" +
           "</div>" +
           '<div class="prod-price">' + fmtMoney(unitFinal) + "</div>";
         div.onclick = function () { addProductToTicket(p, 1, true); };
@@ -861,6 +884,8 @@
       if (!prod) return;
       var amount = qty || 1;
       var unitFinal = getUnitPrice(prod);
+      var stk = getStockQty(prod);
+
       var existing = null;
       for (var i = 0; i < ticket.length; i++) {
         if (ticket[i].sku === prod.sku) {
@@ -868,15 +893,31 @@
           break;
         }
       }
+      var currentQtyInTicket = existing ? existing.cant : 0;
+      var nextQty = currentQtyInTicket + amount;
+
+      if (stk !== null) {
+        if (stk <= 0) {
+          warnOutOfStock("Sin stock: " + prod.nombre + " (0 " + (prod.unidad || "und") + ")");
+          return;
+        }
+        if (nextQty > stk) {
+          warnOutOfStock("Stock insuficiente de " + prod.nombre + ": solo quedan " + stk + " " + (prod.unidad || "und"));
+          return;
+        }
+      }
+
       if (existing) {
-        existing.cant += amount;
+        existing.cant = nextQty;
         existing.precio = unitFinal;
+        existing.stock = stk;
       } else {
         ticket.push({
           sku: prod.sku,
           nombre: prod.nombre,
           precio: unitFinal,
           unidad: prod.unidad || "und",
+          stock: stk,
           cant: amount
         });
       }
@@ -919,7 +960,6 @@
         lastScanTime = now;
         addProductToTicket(match, 1, true);
         flashScannerHit(match.nombre);
-        showToast("Escaneado: " + match.nombre + " (" + fmtMoney(getUnitPrice(match)) + ")");
         if (clearInputOnMatch) el("scanInput").value = "";
         setTimeout(function () { scanBusy = false; }, 350);
         return true;
@@ -993,12 +1033,14 @@
         ticket.forEach(function (item, idx) {
           var uPrice = Number(item.precio) || 0;
           var sub = Number((item.cant * uPrice).toFixed(2));
+          var stk = getStockQty(item);
+          var stkNote = stk !== null ? " - Stock: " + stk : "";
           var row = document.createElement("div");
           row.className = "t-row";
           row.innerHTML =
             "<div>" +
               '<div class="prod-name">' + item.nombre + "</div>" +
-              '<div class="prod-meta">' + item.sku + " - " + fmtMoney(uPrice) + " / " + item.unidad + " (IVA incl.)</div>" +
+              '<div class="prod-meta">' + item.sku + " - " + fmtMoney(uPrice) + " / " + item.unidad + stkNote + "</div>" +
             "</div>" +
             '<div class="qty-box">' +
               '<button type="button" class="btn-sm" onclick="changeQty(' + idx + ', -1)">-</button>' +
@@ -1020,9 +1062,23 @@
     }
 
     window.changeQty = function (idx, delta) {
-      if (!ticket[idx]) return;
-      ticket[idx].cant += delta;
-      if (ticket[idx].cant <= 0) ticket.splice(idx, 1);
+      var item = ticket[idx];
+      if (!item) return;
+      if (delta > 0) {
+        var stk = getStockQty(item);
+        if (stk !== null) {
+          if (stk <= 0) {
+            warnOutOfStock("Sin stock: " + item.nombre + " (0 " + (item.unidad || "und") + ")");
+            return;
+          }
+          if (item.cant + delta > stk) {
+            warnOutOfStock("Stock insuficiente de " + item.nombre + ": solo quedan " + stk + " " + (item.unidad || "und"));
+            return;
+          }
+        }
+      }
+      item.cant += delta;
+      if (item.cant <= 0) ticket.splice(idx, 1);
       renderTicket();
     };
 
@@ -1069,6 +1125,15 @@
       if (!ticket.length) {
         showToast("Agrega al menos un producto al ticket", true);
         return;
+      }
+
+      for (var k = 0; k < ticket.length; k++) {
+        var tItem = ticket[k];
+        var stkCheck = getStockQty(tItem);
+        if (stkCheck !== null && (stkCheck <= 0 || tItem.cant > stkCheck)) {
+          warnOutOfStock("Revisa stock de " + tItem.nombre + ": disponible " + Math.max(0, stkCheck) + " " + (tItem.unidad || "und"));
+          return;
+        }
       }
 
       var totals = getTotals();
