@@ -942,7 +942,7 @@
     var isSavingInventory = false;
     var lastSaleSignature = "";
     var lastSaleTimestamp = 0;
-
+var loadedProformaId = "";
     function el(id) {
       return document.getElementById(id);
     }
@@ -1149,7 +1149,13 @@
         proformaData = savedProformas["P-" + normalized];
         if (proformaData) normalized = "P-" + normalized;
       }
-
+if (proformaData && (proformaData.estado === "Canjeada" || proformaData.canjeada === true)) {
+      if (typeof playBeep === "function") playBeep(false);
+      if (typeof showToast === "function") {
+        showToast("La proforma " + normalized + " ya fue canjeada/vendida.", true);
+      }
+      return false;
+    }
       if (!proformaData || !Array.isArray(proformaData.items) || !proformaData.items.length) {
         return false;
       }
@@ -1167,7 +1173,7 @@
       mode = "VENTA";
       applyModeUI();
       ticket = [];
-
+loadedProformaId = normalized;
       var addedCount = 0;
       for (var i = 0; i < proformaData.items.length; i++) {
         var pItem = proformaData.items[i];
@@ -2003,7 +2009,16 @@ window.buildQrUrl = function (codeText) {
         ? total
         : (isFinite(recibidoInput) && recibidoInput > 0 ? recibidoInput : total);
       var cambio = isProforma ? 0 : Math.max(0, efectivoRecibido - total);
-
+if (!isProforma) {
+          if (!(typeof total === "number") || total <= 0) {
+            showToast("El ticket está en $0.00. Agrega productos antes de generar la venta.", true);
+            return;
+          }
+          if (!metodo || metodo === "Sin seleccionar" || metodo === "Seleccionar" || metodo === "NONE") {
+            showToast("Selecciona el método de pago antes de generar la venta.", true);
+            return;
+          }
+        }
       if (!isProforma && metodo === "Efectivo" && efectivoRecibido < total) {
         showToast("Faltan " + fmtMoney(total - efectivoRecibido) + " para completar el pago", true);
         return;
@@ -2086,6 +2101,16 @@ window.buildQrUrl = function (codeText) {
               })
             }).catch(function () {});
           }
+        }
+      if (!isProforma && loadedProformaId) {
+          if (savedProformas[loadedProformaId]) {
+            savedProformas[loadedProformaId].estado = "Canjeada";
+            savedProformas[loadedProformaId].canjeadaEn = saleDate.toISOString();
+            if (typeof persistProformas === "function") {
+              persistProformas();
+            }
+          }
+          loadedProformaId = "";
         }
       var payload = {
         id_venta: idDoc,
