@@ -76,6 +76,15 @@
       border-color: #059669;
       background: rgba(16, 185, 129, 0.12);
     }
+    .live-clock {
+      font-size: 0.76rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      color: #e2e8f0;
+      font-weight: 600;
+    }
 
     .collapsible-panel {
       display: none;
@@ -403,6 +412,20 @@
       background: rgba(245, 158, 11, 0.18);
       color: #fde68a;
     }
+    .denom-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      margin-top: 4px;
+      margin-bottom: 6px;
+    }
+    .denom-summary {
+      font-size: 0.76rem;
+      color: #fde68a;
+      min-height: 18px;
+      word-break: break-word;
+    }
 
     .change-box {
       margin-top: 10px;
@@ -487,10 +510,79 @@
       text-align: center;
       box-shadow: 0 10px 25px rgba(0, 0, 0, 0.45);
     }
+
+    #printReceiptArea {
+      display: none;
+    }
+
     @media print {
-      header, .left-col, .no-print, .modal-backdrop { display: none !important; }
-      body { background: #fff; color: #000; }
-      .card { background: #fff; color: #000; border: 1px solid #000; }
+      header, main.container, .modal-backdrop, .toast, .no-print {
+        display: none !important;
+      }
+      body {
+        background: #ffffff !important;
+        color: #000000 !important;
+        margin: 0;
+        padding: 0;
+      }
+      #printReceiptArea {
+        display: block !important;
+        width: 100%;
+        max-width: 340px;
+        margin: 0 auto;
+        padding: 12px 10px;
+        font-family: "Courier New", Courier, monospace;
+        color: #000000;
+        background: #ffffff;
+      }
+      .rcpt-center { text-align: center; }
+      .rcpt-brand {
+        font-size: 1.25rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+      }
+      .rcpt-sub { font-size: 0.78rem; margin-top: 2px; }
+      .rcpt-divider {
+        border-top: 1px dashed #000000;
+        margin: 8px 0;
+      }
+      .rcpt-meta { font-size: 0.78rem; line-height: 1.38; }
+      .rcpt-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.78rem;
+      }
+      .rcpt-table th {
+        text-align: left;
+        border-bottom: 1px solid #000000;
+        padding-bottom: 4px;
+      }
+      .rcpt-table td {
+        padding: 4px 0;
+        vertical-align: top;
+      }
+      .rcpt-right { text-align: right; }
+      .rcpt-line {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.82rem;
+        margin: 3px 0;
+      }
+      .rcpt-total {
+        display: flex;
+        justify-content: space-between;
+        font-size: 1rem;
+        font-weight: 800;
+        border-top: 1px solid #000000;
+        border-bottom: 1px solid #000000;
+        padding: 5px 0;
+        margin: 6px 0;
+      }
+      .rcpt-foot {
+        text-align: center;
+        font-size: 0.76rem;
+        margin-top: 10px;
+      }
     }
   </style>
 </head>
@@ -501,6 +593,7 @@
         <div class="brand">
           <span>FERREAcosta <span class="tag">POS</span></span>
           <span id="connBadge" class="badge">Modo Local</span>
+          <span id="liveClock" class="live-clock">--/--/---- --:--:--</span>
           <label class="badge" style="cursor:pointer;">
             <input type="checkbox" id="soundToggle" checked style="margin-right:4px;" /> Sonido
           </label>
@@ -633,6 +726,11 @@
           <div style="display:flex; gap:6px; margin-bottom:6px;">
             <button type="button" class="bill-btn" id="btnExact" data-lbl="Exacto" style="flex:1;">Monto Exacto</button>
           </div>
+
+          <div class="denom-toolbar">
+            <span id="denomSummary" class="denom-summary">Toca monedas o billetes para sumar</span>
+            <button type="button" id="btnClearCash" class="btn-danger btn-sm">Borrar Monto</button>
+          </div>
         </div>
 
         <label class="prod-meta">Efectivo / Monto Recibido ($)</label>
@@ -668,10 +766,11 @@
     </div>
   </div>
 
+  <div id="printReceiptArea"></div>
   <div id="toast" class="toast"></div>
 
   <script>
-    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyPnb9BQE_xnW-6NAdlwT8Ep3W8KH1yFTIQMABXJ1FcDDelaghJ-o4utgqilIn-5cwv/exec";
+    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzPlPYASYwHigHySGW9oDjGab9WNhiXH5rUiXHUcH-DKQj3YEAjDp0QairR5EedibWg/exec";
     var IVA_RATE = 0.15;
     // false: si el precio ya viene con IVA incluido desde origen (ej. $0.30)
     // true: si el precio viene sin IVA y quieres sumarle IVA_RATE
@@ -683,7 +782,7 @@
       { sku: "FER-001", nombre: "Disco de corte metal 4-1/2\"", precio: 1.50, unidad: "und", stock: 25 },
       { sku: "FER-002", nombre: "Cable flexible #14 AWG negro", precio: 0.65, unidad: "m", stock: 120 },
       { sku: "FER-003", nombre: "Cinta aislante negra 3/4\"", precio: 1.10, unidad: "und", stock: 0 },
-      { sku: "FER-004", nombre: "Tornillo drywall 6x1\" caja x100", precio: 2.80, unidad: "caja", stock: 14 },
+      { sku: "FER-004", nombre: "Tornillo drywall 6x1\" caja x100", precio: 2.80, unidad: "cja", stock: 14 },
       { sku: "FER-005", nombre: "Silicona transparente 42.5ml", precio: 1.50, unidad: "und", stock: 8 },
       { sku: "FER-006", nombre: "Interruptor sencillo 3V blanco", precio: 2.75, unidad: "und", stock: 6 }
     ];
@@ -700,6 +799,8 @@
     var scanBusy = false;
     var autoScanTimer = null;
     var selectedDenomLabel = "";
+    var denomCounts = {};
+    var lastReceiptInfo = null;
 
     var isGeneratingSale = false;
     var lastSaleSignature = "";
@@ -787,6 +888,49 @@
       }
 
       return clean;
+    }
+
+    function formatDateTimeEs(dateObj) {
+      var d = dateObj || new Date();
+      var fechaStr = d.toLocaleDateString("es-EC", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric"
+      });
+      var horaStr = d.toLocaleTimeString("es-EC", {
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+        hour12: true
+      });
+      return fechaStr + " • " + horaStr;
+    }
+
+    function updateLiveClock() {
+      var clockEl = el("liveClock");
+      if (clockEl) {
+        clockEl.textContent = formatDateTimeEs(new Date());
+      }
+    }
+
+    function formatDenomBreakdown() {
+      var keys = Object.keys(denomCounts);
+      if (!keys.length) return "";
+      var parts = [];
+      for (var i = 0; i < keys.length; i++) {
+        var entry = denomCounts[keys[i]];
+        if (entry && entry.count > 0) {
+          parts.push(entry.count + "x " + entry.lbl);
+        }
+      }
+      return parts.join(" + ");
+    }
+
+    function refreshDenomSummary() {
+      var sumEl = el("denomSummary");
+      if (!sumEl) return;
+      var text = formatDenomBreakdown();
+      sumEl.textContent = text ? "Sumado: " + text : "Toca monedas o billetes para sumar";
     }
 
     function flashScannerHit(labelText) {
@@ -1064,7 +1208,9 @@
     function resetPaymentSelection() {
       el("cashReceived").value = "";
       selectedDenomLabel = "";
+      denomCounts = {};
       document.querySelectorAll(".bill-btn").forEach(function (b) { b.classList.remove("selected"); });
+      refreshDenomSummary();
       updateChangeCalc();
     }
 
@@ -1167,6 +1313,47 @@
         });
     }
 
+    function buildReceiptHtml(info) {
+      var rowsHtml = "";
+      for (var i = 0; i < info.items.length; i++) {
+        var it = info.items[i];
+        rowsHtml +=
+          "<tr>" +
+            "<td>" + it.cant + " " + it.unidad + "</td>" +
+            "<td>" + it.nombre + "<br><small>" + fmtMoney(it.precio) + " c/u</small></td>" +
+            '<td class="rcpt-right">' + fmtMoney(it.subtotal) + "</td>" +
+          "</tr>";
+      }
+
+      return (
+        '<div class="rcpt-center">' +
+          '<div class="rcpt-brand">FERREAcosta</div>' +
+          '<div class="rcpt-sub">GUAYAQUIL - ECUADOR</div>' +
+          '<div class="rcpt-sub">COMPROBANTE DE ' + (info.modo === "PROFORMA" ? "PROFORMA" : "VENTA") + "</div>" +
+        "</div>" +
+        '<div class="rcpt-divider"></div>' +
+        '<div class="rcpt-meta">' +
+          "<div><strong>RECIBO N°:</strong> " + info.idVenta + "</div>" +
+          "<div><strong>FECHA/HORA:</strong> " + info.fechaHora + "</div>" +
+          "<div><strong>VENDEDOR:</strong> " + info.vendedor + "</div>" +
+          "<div><strong>CAJA:</strong> " + info.caja + " | <strong>PAGO:</strong> " + info.metodoPago + "</div>" +
+        "</div>" +
+        '<div class="rcpt-divider"></div>' +
+        '<table class="rcpt-table">' +
+          "<thead><tr><th>CANT</th><th>DESCRIPCIÓN</th><th class=\"rcpt-right\">SUBT.</th></tr></thead>" +
+          "<tbody>" + rowsHtml + "</tbody>" +
+        "</table>" +
+        '<div class="rcpt-divider"></div>' +
+        '<div class="rcpt-line"><span>SUBTOTAL (CON IVA):</span><strong>' + fmtMoney(info.subtotal) + "</strong></div>" +
+        '<div class="rcpt-line"><span>IVA (15%):</span><strong>' + fmtMoney(info.iva) + "</strong></div>" +
+        '<div class="rcpt-total"><span>TOTAL:</span><span>' + fmtMoney(info.total) + "</span></div>" +
+        '<div class="rcpt-line"><span>VALOR RECIBIDO:</span><strong>' + fmtMoney(info.recibido) + "</strong></div>" +
+        '<div class="rcpt-line"><span>CAMBIO / VUELTO:</span><strong>' + fmtMoney(info.cambio) + "</strong></div>" +
+        '<div class="rcpt-divider"></div>' +
+        '<div class="rcpt-foot">¡Gracias por su compra!<br>Vendedor: ' + info.vendedor + "</div>"
+      );
+    }
+
     function generateSale() {
       if (isGeneratingSale) return;
       if (!ticket.length) {
@@ -1204,8 +1391,9 @@
         total: total.toFixed(2),
         items: ticket.map(function (i) { return i.sku + ":" + i.cant; })
       });
-      var now = Date.now();
-      if (signature === lastSaleSignature && now - lastSaleTimestamp < 4000) {
+      var saleDate = new Date();
+      var nowMs = saleDate.getTime();
+      if (signature === lastSaleSignature && nowMs - lastSaleTimestamp < 4000) {
         showToast("Venta ya generada hace un momento; evita repetirla", true);
         return;
       }
@@ -1214,11 +1402,39 @@
       el("btnGenerateSale").disabled = true;
       el("btnGenerateSale").textContent = "Generando...";
 
-      var idVenta = "V-" + String(now).slice(-6);
+      var idVenta = "V-" + String(nowMs).slice(-6);
+      var vendedorActual = el("vendedorSelect").value || "Vendedor 1";
+      var cajaActual = el("cajaSelect").value || "Caja Principal";
+
+      lastReceiptInfo = {
+        idVenta: idVenta,
+        fechaHora: formatDateTimeEs(saleDate),
+        caja: cajaActual,
+        vendedor: vendedorActual,
+        modo: mode,
+        metodoPago: metodo,
+        subtotal: subtotal,
+        iva: iva,
+        total: total,
+        recibido: efectivoRecibido,
+        cambio: cambio,
+        items: ticket.map(function (i) {
+          var uPrice = Number(i.precio) || 0;
+          return {
+            cant: i.cant,
+            unidad: formatUnitLabel(i.unidad),
+            nombre: i.nombre,
+            precio: uPrice,
+            subtotal: Number((i.cant * uPrice).toFixed(2))
+          };
+        })
+      };
+
       var payload = {
         id_venta: idVenta,
-        caja: el("cajaSelect").value,
-        vendedor: el("vendedorSelect").value,
+        fecha_hora: saleDate.toISOString(),
+        caja: cajaActual,
+        vendedor: vendedorActual,
         modo: mode,
         estado: mode === "PROFORMA" ? "Proforma" : "Vendida",
         metodo_pago: metodo,
@@ -1406,11 +1622,54 @@
       renderTicket();
     };
     el("btnGenerateSale").onclick = generateSale;
-    el("btnPrint").onclick = function () { window.print(); };
+
+    el("btnPrint").onclick = function () {
+      var dataToPrint = lastReceiptInfo;
+      if (!dataToPrint && ticket.length > 0) {
+        var totals = getTotals();
+        var recInput = parseFloat(el("cashReceived").value);
+        var recVal = isFinite(recInput) && recInput > 0 ? recInput : totals.total;
+        dataToPrint = {
+          idVenta: "BORRADOR",
+          fechaHora: formatDateTimeEs(new Date()),
+          caja: el("cajaSelect").value || "Caja Principal",
+          vendedor: el("vendedorSelect").value || "Vendedor 1",
+          modo: mode,
+          metodoPago: el("payMethod").value,
+          subtotal: totals.subtotal,
+          iva: totals.iva,
+          total: totals.total,
+          recibido: recVal,
+          cambio: Math.max(0, recVal - totals.total),
+          items: ticket.map(function (i) {
+            var uPrice = Number(i.precio) || 0;
+            return {
+              cant: i.cant,
+              unidad: formatUnitLabel(i.unidad),
+              nombre: i.nombre,
+              precio: uPrice,
+              subtotal: Number((i.cant * uPrice).toFixed(2))
+            };
+          })
+        };
+      }
+
+      if (!dataToPrint || !dataToPrint.items || !dataToPrint.items.length) {
+        showToast("Genera una venta o agrega productos para imprimir", true);
+        return;
+      }
+
+      playBeep(true);
+      el("printReceiptArea").innerHTML = buildReceiptHtml(dataToPrint);
+      window.print();
+    };
 
     el("cashReceived").oninput = function () {
       if (el("cashReceived").value === "") {
         selectedDenomLabel = "";
+        denomCounts = {};
+        document.querySelectorAll(".bill-btn").forEach(function (b) { b.classList.remove("selected"); });
+        refreshDenomSummary();
       } else if (!selectedDenomLabel) {
         selectedDenomLabel = "Personalizado";
       }
@@ -1418,22 +1677,49 @@
     };
     el("payMethod").onchange = updateChangeCalc;
 
+    el("btnClearCash").onclick = function () {
+      playBeep(true);
+      resetPaymentSelection();
+    };
+
     document.querySelectorAll(".bill-btn").forEach(function (btn) {
+      if (btn.id === "btnClearCash") return;
       btn.onclick = function () {
-        document.querySelectorAll(".bill-btn").forEach(function (b) { b.classList.remove("selected"); });
-        btn.classList.add("selected");
+        playBeep(true);
         var totals = getTotals();
         if (btn.id === "btnExact") {
+          document.querySelectorAll(".bill-btn").forEach(function (b) { b.classList.remove("selected"); });
+          btn.classList.add("selected");
+          denomCounts = {};
           el("cashReceived").value = totals.total.toFixed(2);
-          selectedDenomLabel = "Exacto";
-        } else if (btn.dataset.amt) {
-          el("cashReceived").value = parseFloat(btn.dataset.amt).toFixed(2);
-          selectedDenomLabel = btn.dataset.lbl;
+          selectedDenomLabel = "Exacto (" + fmtMoney(totals.total) + ")";
+          refreshDenomSummary();
+          updateChangeCalc();
+          return;
         }
-        updateChangeCalc();
+        if (btn.dataset.amt) {
+          var amt = parseFloat(btn.dataset.amt);
+          var lbl = btn.dataset.lbl || fmtMoney(amt);
+          var key = amt.toFixed(2);
+          if (!denomCounts[key]) {
+            denomCounts[key] = { amt: amt, lbl: lbl, count: 0 };
+          }
+          denomCounts[key].count += 1;
+          btn.classList.add("selected");
+
+          var currentVal = parseFloat(el("cashReceived").value);
+          var baseVal = isFinite(currentVal) && currentVal > 0 ? currentVal : 0;
+          var newTotalCash = Number((baseVal + amt).toFixed(2));
+          el("cashReceived").value = newTotalCash.toFixed(2);
+          selectedDenomLabel = formatDenomBreakdown();
+          refreshDenomSummary();
+          updateChangeCalc();
+        }
       };
     });
 
+    updateLiveClock();
+    setInterval(updateLiveClock, 1000);
     saveVendors();
     renderCatalog();
     renderTicket();
