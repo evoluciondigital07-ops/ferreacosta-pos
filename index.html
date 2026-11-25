@@ -1639,12 +1639,41 @@
         return true;
       }
 
-      if (mode !== "INVENTARIO" && code.toUpperCase().indexOf("P-") === 0 && !silentNotFound) {
-        playBeep(false);
-        showToast("Proforma no encontrada en este equipo: " + code.toUpperCase(), true);
-        return false;
+      if (mode !== "INVENTARIO" && code.toUpperCase().indexOf("P-") === 0) {
+      var upperCode = code.toUpperCase();
+      if (typeof APPS_SCRIPT_URL === "string" && APPS_SCRIPT_URL) {
+        if (!silentNotFound) {
+          showToast("Buscando proforma en la nube: " + upperCode + "...", false);
+        }
+        fetch(APPS_SCRIPT_URL + "?action=get_proforma&id=" + encodeURIComponent(upperCode))
+          .then(function (res) { return res.json(); })
+          .then(function (data) {
+            if (data && data.ok && data.proforma) {
+              savedProformas[upperCode] = data.proforma;
+              if (typeof persistProformas === "function") {
+                persistProformas();
+              }
+              loadProformaIntoTicket(upperCode, clearInputOnMatch);
+            } else if (!silentNotFound) {
+              playBeep(false);
+              showToast("Proforma no encontrada: " + upperCode, true);
+            }
+          })
+          .catch(function () {
+            if (!silentNotFound) {
+              playBeep(false);
+              showToast("Proforma no encontrada en este equipo: " + upperCode, true);
+            }
+          });
+        return true;
       }
 
+      if (!silentNotFound) {
+        playBeep(false);
+        showToast("Proforma no encontrada en este equipo: " + upperCode, true);
+      }
+      return false;
+    }
       var now = Date.now();
       var normCode = code.toLowerCase();
       if (normCode === lastScanCode && now - lastScanTime < SCAN_COOLDOWN_MS) {
@@ -2029,17 +2058,35 @@ window.buildQrUrl = function (codeText) {
       };
 
       if (isProforma) {
-        savedProformas[idDoc] = {
-          idProforma: idDoc,
-          fechaHora: lastReceiptInfo.fechaHora,
-          vendedor: vendedorActual,
-          caja: cajaActual,
-          total: total,
-          items: mappedItems
-        };
-        persistProformas();
-      }
-
+          savedProformas[idDoc] = {
+            idProforma: idDoc,
+            fechaHora: lastReceiptInfo.fechaHora,
+            vendedor: vendedorActual,
+            caja: cajaActual,
+            total: total,
+            items: mappedItems
+          };
+          persistProformas();
+          if (typeof APPS_SCRIPT_URL === "string" && APPS_SCRIPT_URL) {
+            fetch(APPS_SCRIPT_URL, {
+              method: "POST",
+              mode: "no-cors",
+              headers: { "Content-Type": "text/plain;charset=utf-8" },
+              body: JSON.stringify({
+                id_venta: idDoc,
+                fecha_hora: saleDate.toISOString(),
+                caja: cajaActual,
+                vendedor: vendedorActual,
+                modo: "PROFORMA",
+                estado: "Proforma",
+                subtotal: subtotal,
+                iva: iva,
+                total: total,
+                items: mappedItems
+              })
+            }).catch(function () {});
+          }
+        }
       var payload = {
         id_venta: idDoc,
         fecha_hora: saleDate.toISOString(),
