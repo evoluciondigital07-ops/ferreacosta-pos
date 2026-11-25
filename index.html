@@ -671,7 +671,7 @@
   <div id="toast" class="toast"></div>
 
   <script>
-    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx4wlkYJ67IEJjBaPdjZuDEkgB3WWoFtzLGB3Bm7AiEQ5HPIDVNwLW0XiGQECKCHQDr/exec";
+    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyPnb9BQE_xnW-6NAdlwT8Ep3W8KH1yFTIQMABXJ1FcDDelaghJ-o4utgqilIn-5cwv/exec";
     var IVA_RATE = 0.15;
     // false: si el precio ya viene con IVA incluido desde origen (ej. $0.30)
     // true: si el precio viene sin IVA y quieres sumarle IVA_RATE
@@ -744,6 +744,49 @@
       if (!prod || prod.stock === undefined || prod.stock === null || prod.stock === "") return null;
       var n = Number(prod.stock);
       return isFinite(n) ? n : null;
+    }
+
+    function formatUnitLabel(rawUnit) {
+      var clean = String(rawUnit || "und").trim();
+      var key = clean.toLowerCase().replace(/\s+/g, " ");
+
+      var map = {
+        "unidad": "und",
+        "unidades": "und",
+        "und": "und",
+        "u": "und",
+        "libra": "lb",
+        "libras": "lb",
+        "lb": "lb",
+        "litro": "lt",
+        "litros": "lt",
+        "lt": "lt",
+        "l": "lt",
+        "metro": "m",
+        "metros": "m",
+        "m": "m",
+        "caja": "cja",
+        "cajas": "cja",
+        "paquete": "paq",
+        "paquetes": "paq",
+        "rollo": "rll",
+        "rollos": "rll",
+        "galon": "gln",
+        "galones": "gln",
+        "galón": "gln",
+        "galónes": "gln"
+      };
+
+      if (map[key]) return map[key];
+
+      if (key.indexOf("paquete") === 0) {
+        return clean.replace(/^paquetes?/i, "paq");
+      }
+      if (key.indexOf("caja") === 0) {
+        return clean.replace(/^cajas?/i, "cja");
+      }
+
+      return clean;
     }
 
     function flashScannerHit(labelText) {
@@ -863,9 +906,10 @@
         var unitFinal = getUnitPrice(p);
         var stk = getStockQty(p);
         var isEmpty = stk !== null && stk <= 0;
+        var unitDisp = formatUnitLabel(p.unidad);
         var stockText = stk !== null
-          ? (isEmpty ? "SIN STOCK (0 " + (p.unidad || "und") + ")" : "Stock: " + stk + " " + (p.unidad || "und"))
-          : (p.unidad || "und");
+          ? (isEmpty ? "SIN STOCK (0 " + unitDisp + ")" : "Stock: " + stk + " " + unitDisp)
+          : unitDisp;
 
         var div = document.createElement("div");
         div.className = "prod-item" + (isEmpty ? " out-stock" : "");
@@ -885,6 +929,7 @@
       var amount = qty || 1;
       var unitFinal = getUnitPrice(prod);
       var stk = getStockQty(prod);
+      var unitDisp = formatUnitLabel(prod.unidad);
 
       var existing = null;
       for (var i = 0; i < ticket.length; i++) {
@@ -898,11 +943,11 @@
 
       if (stk !== null) {
         if (stk <= 0) {
-          warnOutOfStock("Sin stock: " + prod.nombre + " (0 " + (prod.unidad || "und") + ")");
+          warnOutOfStock("Sin stock: " + prod.nombre + " (0 " + unitDisp + ")");
           return;
         }
         if (nextQty > stk) {
-          warnOutOfStock("Stock insuficiente de " + prod.nombre + ": solo quedan " + stk + " " + (prod.unidad || "und"));
+          warnOutOfStock("Stock insuficiente de " + prod.nombre + ": solo quedan " + stk + " " + unitDisp);
           return;
         }
       }
@@ -1034,13 +1079,14 @@
           var uPrice = Number(item.precio) || 0;
           var sub = Number((item.cant * uPrice).toFixed(2));
           var stk = getStockQty(item);
+          var unitDisp = formatUnitLabel(item.unidad);
           var stkNote = stk !== null ? " - Stock: " + stk : "";
           var row = document.createElement("div");
           row.className = "t-row";
           row.innerHTML =
             "<div>" +
               '<div class="prod-name">' + item.nombre + "</div>" +
-              '<div class="prod-meta">' + item.sku + " - " + fmtMoney(uPrice) + " / " + item.unidad + stkNote + "</div>" +
+              '<div class="prod-meta">' + item.sku + " - " + fmtMoney(uPrice) + " / " + unitDisp + stkNote + "</div>" +
             "</div>" +
             '<div class="qty-box">' +
               '<button type="button" class="btn-sm" onclick="changeQty(' + idx + ', -1)">-</button>' +
@@ -1066,13 +1112,14 @@
       if (!item) return;
       if (delta > 0) {
         var stk = getStockQty(item);
+        var unitDisp = formatUnitLabel(item.unidad);
         if (stk !== null) {
           if (stk <= 0) {
-            warnOutOfStock("Sin stock: " + item.nombre + " (0 " + (item.unidad || "und") + ")");
+            warnOutOfStock("Sin stock: " + item.nombre + " (0 " + unitDisp + ")");
             return;
           }
           if (item.cant + delta > stk) {
-            warnOutOfStock("Stock insuficiente de " + item.nombre + ": solo quedan " + stk + " " + (item.unidad || "und"));
+            warnOutOfStock("Stock insuficiente de " + item.nombre + ": solo quedan " + stk + " " + unitDisp);
             return;
           }
         }
@@ -1130,8 +1177,9 @@
       for (var k = 0; k < ticket.length; k++) {
         var tItem = ticket[k];
         var stkCheck = getStockQty(tItem);
+        var unitDisp = formatUnitLabel(tItem.unidad);
         if (stkCheck !== null && (stkCheck <= 0 || tItem.cant > stkCheck)) {
-          warnOutOfStock("Revisa stock de " + tItem.nombre + ": disponible " + Math.max(0, stkCheck) + " " + (tItem.unidad || "und"));
+          warnOutOfStock("Revisa stock de " + tItem.nombre + ": disponible " + Math.max(0, stkCheck) + " " + unitDisp);
           return;
         }
       }
