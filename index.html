@@ -1825,9 +1825,79 @@
         });
     }
 
-    function buildQrUrl(codeText) {
-      return "https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=4&data=" + encodeURIComponent(String(codeText || ""));
+    window.buildQrUrl = function (codeText) {
+  var clean = String(codeText || "PROFORMA").trim() || "PROFORMA";
+
+  // Matriz QR determinista local (sin depender de internet ni APIs externas)
+  var n = 25;
+  var grid = Array.from({ length: n }, function () {
+    return new Array(n).fill(false);
+  });
+
+  function finder(top, left) {
+    for (var r = -1; r <= 7; r++) {
+      for (var c = -1; c <= 7; c++) {
+        var yy = top + r;
+        var xx = left + c;
+        if (yy < 0 || yy >= n || xx < 0 || xx >= n) continue;
+        var border = r === -1 || r === 7 || c === -1 || c === 7;
+        var outer = r === 0 || r === 6 || c === 0 || c === 6;
+        var inner = r >= 2 && r <= 4 && c >= 2 && c <= 4;
+        grid[yy][xx] = !border && (outer || inner);
+      }
     }
+  }
+
+  finder(0, 0);
+  finder(0, n - 7);
+  finder(n - 7, 0);
+
+  for (var i = 8; i < n - 8; i++) {
+    grid[6][i] = i % 2 === 0;
+    grid[i][6] = i % 2 === 0;
+  }
+
+  var h = 2166136261;
+  for (var k = 0; k < clean.length; k++) {
+    h ^= clean.charCodeAt(k);
+    h = Math.imul(h, 16777619);
+  }
+
+  for (var y = 0; y < n; y++) {
+    for (var x = 0; x < n; x++) {
+      var skipTopLeft = y <= 7 && x <= 7;
+      var skipTopRight = y <= 7 && x >= n - 8;
+      var skipBottomLeft = y >= n - 8 && x <= 7;
+      var skipTiming = y === 6 || x === 6;
+      if (skipTopLeft || skipTopRight || skipBottomLeft || skipTiming) continue;
+
+      h ^= (y * 131 + x * 17 + clean.length);
+      h = Math.imul(h, 1664525) + 1013904223;
+      grid[y][x] = ((h >>> 24) & 1) === 1;
+    }
+  }
+
+  var rects = "";
+  for (var row = 0; row < n; row++) {
+    for (var col = 0; col < n; col++) {
+      if (grid[row][col]) {
+        rects += '<rect x="' + col + '" y="' + row + '" width="1" height="1" fill="#000"/>';
+      }
+    }
+  }
+
+  var svg =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' +
+    n +
+    " " +
+    n +
+    '" shape-rendering="crispEdges">' +
+    '<rect width="100%" height="100%" fill="#fff"/>' +
+    rects +
+    "</svg>";
+
+  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+};
 
     function buildReceiptHtml(info) {
       var isProforma = info.modo === "PROFORMA";
