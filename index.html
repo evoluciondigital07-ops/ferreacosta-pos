@@ -325,6 +325,7 @@
       flex-direction: column;
       gap: 8px;
       margin-top: 8px;
+      contain: content;
     }
     .prod-item {
       display: flex;
@@ -336,8 +337,10 @@
       background: var(--panel-2);
       border: 1px solid var(--border);
       cursor: pointer;
+      user-select: none;
     }
     .prod-item:hover { border-color: var(--accent); }
+    .prod-item:active { transform: scale(0.99); }
     .prod-item.out-stock {
       border-color: rgba(239, 68, 68, 0.55);
       opacity: 0.78;
@@ -649,10 +652,11 @@
         text-align: center;
       }
       .rcpt-qr-box img {
-        width: 112px;
-        height: 112px;
+        width: 128px;
+        height: 128px;
         display: inline-block;
         margin: 4px auto;
+        image-rendering: pixelated;
       }
       .rcpt-qr-code {
         font-size: 0.84rem;
@@ -899,10 +903,8 @@
   <div id="toast" class="toast"></div>
 
   <script>
-    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwP1FpdtObjHjBbCSXbIjP0ik_Sd5zYqjKW5DHgaB9EhxHU8h4Y4CiK4yDsGv4kSbjU/exec";
+    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwyAgIAanCER1On27zptAyY-oJ-7qquGzLYG1gAl8cppbQ47eW9dUwvj5KqL3GBMFc/exec";
     var IVA_RATE = 0.15;
-    // false: si el precio ya viene con IVA incluido desde origen (ej. $0.30)
-    // true: si el precio viene sin IVA y quieres sumarle IVA_RATE
     var APLICAR_IVA_A_PRECIOS = false;
     var SCAN_COOLDOWN_MS = 1800;
 
@@ -919,6 +921,7 @@
     var vendors = JSON.parse(localStorage.getItem("fa_vendors") || "null") || DEFAULT_VENDORS;
     var catalog = JSON.parse(localStorage.getItem("fa_catalog") || "null") || SAMPLE_CATALOG;
     var savedProformas = JSON.parse(localStorage.getItem("fa_proformas") || "{}");
+    var catalogBySku = {};
     var ticket = [];
     var invItems = [];
     var mode = "VENTA";
@@ -929,6 +932,7 @@
     var lastScanTime = 0;
     var scanBusy = false;
     var autoScanTimer = null;
+    var filterDebounceTimer = null;
     var selectedDenomLabel = "";
     var denomCounts = {};
     var lastReceiptInfo = null;
@@ -940,6 +944,14 @@
 
     function el(id) {
       return document.getElementById(id);
+    }
+
+    function rebuildCatalogIndex() {
+      catalogBySku = {};
+      for (var i = 0; i < catalog.length; i++) {
+        var key = String(catalog[i].sku || "").trim().toLowerCase();
+        if (key) catalogBySku[key] = catalog[i];
+      }
     }
 
     function showToast(msg, isErr) {
@@ -1011,14 +1023,8 @@
       };
 
       if (map[key]) return map[key];
-
-      if (key.indexOf("paquete") === 0) {
-        return clean.replace(/^paquetes?/i, "paq");
-      }
-      if (key.indexOf("caja") === 0) {
-        return clean.replace(/^cajas?/i, "cja");
-      }
-
+      if (key.indexOf("paquete") === 0) return clean.replace(/^paquetes?/i, "paq");
+      if (key.indexOf("caja") === 0) return clean.replace(/^cajas?/i, "cja");
       return clean;
     }
 
@@ -1130,12 +1136,7 @@
     function findCatalogItemBySku(skuCode) {
       var target = String(skuCode || "").trim().toLowerCase();
       if (!target) return null;
-      for (var i = 0; i < catalog.length; i++) {
-        if (String(catalog[i].sku || "").trim().toLowerCase() === target) {
-          return catalog[i];
-        }
-      }
-      return null;
+      return catalogBySku[target] || null;
     }
 
     function loadProformaIntoTicket(rawCode, clearInputOnMatch) {
@@ -1394,6 +1395,7 @@
           }
         }
         localStorage.setItem("fa_catalog", JSON.stringify(catalog));
+        rebuildCatalogIndex();
         renderCatalog();
       } else {
         for (var j = 0; j < invItems.length; j++) {
@@ -1450,6 +1452,9 @@
       var arrow = el(arrowId);
       var isOpen = panel.classList.toggle("open");
       if (arrow) arrow.textContent = isOpen ? "▲" : "▼";
+      if (panelId === "catalogCollapsible" && isOpen) {
+        renderCatalog();
+      }
     }
 
     function saveVendors(selectedName) {
@@ -1519,15 +1524,25 @@
     }
 
     function renderCatalog() {
-      var q = el("filterInput").value.trim().toLowerCase();
-      var filtered = catalog.filter(function (p) {
-        return String(p.nombre || "").toLowerCase().indexOf(q) !== -1 ||
-               String(p.sku || "").toLowerCase().indexOf(q) !== -1;
-      });
       el("catalogCount").textContent = catalog.length + " ITEMS";
+      var panel = el("catalogCollapsible");
+      if (panel && !panel.classList.contains("open")) {
+        return;
+      }
+
+      var q = el("filterInput").value.trim().toLowerCase();
       var list = el("productList");
-      list.innerHTML = "";
-      filtered.slice(0, 120).forEach(function (p) {
+      var frag = document.createDocumentFragment();
+      var shown = 0;
+
+      for (var i = 0; i < catalog.length && shown < 100; i++) {
+        var p = catalog[i];
+        if (q) {
+          var nMatch = String(p.nombre || "").toLowerCase().indexOf(q) !== -1;
+          var sMatch = String(p.sku || "").toLowerCase().indexOf(q) !== -1;
+          if (!nMatch && !sMatch) continue;
+        }
+
         var unitFinal = getUnitPrice(p);
         var stk = getStockQty(p);
         var isEmpty = stk !== null && stk <= 0;
@@ -1538,22 +1553,33 @@
 
         var div = document.createElement("div");
         div.className = "prod-item" + (isEmpty && mode !== "INVENTARIO" ? " out-stock" : "");
+        div.setAttribute("data-sku", String(p.sku || ""));
         div.innerHTML =
           "<div>" +
             '<div class="prod-name">' + p.nombre + "</div>" +
             '<div class="prod-meta">SKU: ' + p.sku + ' - <span class="stock-pill' + (isEmpty ? " low" : "") + '">' + stockText + "</span></div>" +
           "</div>" +
           '<div class="prod-price">' + fmtMoney(unitFinal) + "</div>";
-        div.onclick = function () {
-          if (mode === "INVENTARIO") {
-            addProductToInventoryCount(p, 1);
-          } else {
-            addProductToTicket(p, 1, true);
-          }
-        };
-        list.appendChild(div);
-      });
+        frag.appendChild(div);
+        shown++;
+      }
+
+      list.innerHTML = "";
+      list.appendChild(frag);
     }
+
+    el("productList").addEventListener("click", function (e) {
+      var itemEl = e.target.closest(".prod-item");
+      if (!itemEl) return;
+      var sku = itemEl.getAttribute("data-sku");
+      var prod = findCatalogItemBySku(sku);
+      if (!prod) return;
+      if (mode === "INVENTARIO") {
+        addProductToInventoryCount(prod, 1);
+      } else {
+        addProductToTicket(prod, 1, true);
+      }
+    });
 
     function addProductToTicket(prod, qty, withSound) {
       if (!prod) return;
@@ -1624,13 +1650,7 @@
         return false;
       }
 
-      var match = null;
-      for (var i = 0; i < catalog.length; i++) {
-        if (String(catalog[i].sku).trim().toLowerCase() === normCode) {
-          match = catalog[i];
-          break;
-        }
-      }
+      var match = catalogBySku[normCode] || null;
       if (!match && !silentNotFound) {
         for (var j = 0; j < catalog.length; j++) {
           if (String(catalog[j].nombre).toLowerCase().indexOf(normCode) !== -1) {
@@ -1733,6 +1753,7 @@
       if (!ticket.length) {
         wrap.innerHTML = '<div class="prod-meta" style="text-align:center; padding:18px;">Escanea o selecciona productos para iniciar el ticket</div>';
       } else {
+        var frag = document.createDocumentFragment();
         ticket.forEach(function (item, idx) {
           var uPrice = Number(item.precio) || 0;
           var sub = Number((item.cant * uPrice).toFixed(2));
@@ -1755,8 +1776,9 @@
               '<div style="font-weight:700;">' + fmtMoney(sub) + "</div>" +
               '<button type="button" class="btn-danger btn-sm" onclick="removeItem(' + idx + ')">X</button>' +
             "</div>";
-          wrap.appendChild(row);
+          frag.appendChild(row);
         });
+        wrap.appendChild(frag);
       }
       var totals = getTotals();
       el("subVal").textContent = fmtMoney(totals.subtotal);
@@ -1796,6 +1818,7 @@
       if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf("REEMPLAZA_CON_TU_URL") !== -1) {
         el("connBadge").textContent = "Modo Local";
         el("connBadge").classList.remove("ok");
+        rebuildCatalogIndex();
         renderCatalog();
         showToast("Usando catalogo local de prueba");
         return;
@@ -1809,6 +1832,7 @@
             localStorage.setItem("fa_catalog", JSON.stringify(catalog));
             el("connBadge").textContent = "Sheets Conectado";
             el("connBadge").classList.add("ok");
+            rebuildCatalogIndex();
             renderCatalog();
           }
           if (Array.isArray(data.vendors) && data.vendors.length > 0) {
@@ -1824,80 +1848,281 @@
           el("btnSync").textContent = "Sincronizar";
         });
     }
-
-    window.buildQrUrl = function (codeText) {
-  var clean = String(codeText || "PROFORMA").trim() || "PROFORMA";
-
-  // Matriz QR determinista local (sin depender de internet ni APIs externas)
-  var n = 25;
-  var grid = Array.from({ length: n }, function () {
-    return new Array(n).fill(false);
-  });
-
-  function finder(top, left) {
-    for (var r = -1; r <= 7; r++) {
-      for (var c = -1; c <= 7; c++) {
-        var yy = top + r;
-        var xx = left + c;
-        if (yy < 0 || yy >= n || xx < 0 || xx >= n) continue;
-        var border = r === -1 || r === 7 || c === -1 || c === 7;
-        var outer = r === 0 || r === 6 || c === 0 || c === 6;
-        var inner = r >= 2 && r <= 4 && c >= 2 && c <= 4;
-        grid[yy][xx] = !border && (outer || inner);
+    /* === GENERADOR QR REAL ESTANDAR ISO/IEC 18004 (VERSIONES 1-4, NIVEL M, 100% LOCAL) === */
+    (function () {
+      var GF_EXP = new Array(512);
+      var GF_LOG = new Array(256);
+      var x = 1;
+      for (var i = 0; i < 255; i++) {
+        GF_EXP[i] = x;
+        GF_LOG[x] = i;
+        x <<= 1;
+        if (x & 0x100) x ^= 0x11d;
       }
-    }
-  }
-
-  finder(0, 0);
-  finder(0, n - 7);
-  finder(n - 7, 0);
-
-  for (var i = 8; i < n - 8; i++) {
-    grid[6][i] = i % 2 === 0;
-    grid[i][6] = i % 2 === 0;
-  }
-
-  var h = 2166136261;
-  for (var k = 0; k < clean.length; k++) {
-    h ^= clean.charCodeAt(k);
-    h = Math.imul(h, 16777619);
-  }
-
-  for (var y = 0; y < n; y++) {
-    for (var x = 0; x < n; x++) {
-      var skipTopLeft = y <= 7 && x <= 7;
-      var skipTopRight = y <= 7 && x >= n - 8;
-      var skipBottomLeft = y >= n - 8 && x <= 7;
-      var skipTiming = y === 6 || x === 6;
-      if (skipTopLeft || skipTopRight || skipBottomLeft || skipTiming) continue;
-
-      h ^= (y * 131 + x * 17 + clean.length);
-      h = Math.imul(h, 1664525) + 1013904223;
-      grid[y][x] = ((h >>> 24) & 1) === 1;
-    }
-  }
-
-  var rects = "";
-  for (var row = 0; row < n; row++) {
-    for (var col = 0; col < n; col++) {
-      if (grid[row][col]) {
-        rects += '<rect x="' + col + '" y="' + row + '" width="1" height="1" fill="#000"/>';
+      for (var j = 255; j < 512; j++) {
+        GF_EXP[j] = GF_EXP[j - 255];
       }
-    }
-  }
 
-  var svg =
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ' +
-    n +
-    " " +
-    n +
-    '" shape-rendering="crispEdges">' +
-    '<rect width="100%" height="100%" fill="#fff"/>' +
-    rects +
-    "</svg>";
+      function gfMul(a, b) {
+        if (a === 0 || b === 0) return 0;
+        return GF_EXP[(GF_LOG[a] + GF_LOG[b]) % 255];
+      }
 
-  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-};
+      function polyMul(p1, p2) {
+        var res = new Array(p1.length + p2.length - 1).fill(0);
+        for (var i = 0; i < p1.length; i++) {
+          for (var j = 0; j < p2.length; j++) {
+            res[i + j] ^= gfMul(p1[i], p2[j]);
+          }
+        }
+        return res;
+      }
+
+      function rsGeneratorPoly(ecLen) {
+        var poly = [1];
+        for (var i = 0; i < ecLen; i++) {
+          poly = polyMul(poly, [1, GF_EXP[i]]);
+        }
+        return poly;
+      }
+
+      function rsEncode(data, ecLen) {
+        var gen = rsGeneratorPoly(ecLen);
+        var msg = data.concat(new Array(ecLen).fill(0));
+        for (var i = 0; i < data.length; i++) {
+          var coef = msg[i];
+          if (coef !== 0) {
+            for (var j = 0; j < gen.length; j++) {
+              msg[i + j] ^= gfMul(gen[j], coef);
+            }
+          }
+        }
+        return msg.slice(data.length);
+      }
+
+      var SPECS = [
+        null,
+        { version: 1, size: 21, ecBytes: 10, maxDataBytes: 14 },
+        { version: 2, size: 25, ecBytes: 16, maxDataBytes: 26 },
+        { version: 3, size: 29, ecBytes: 26, maxDataBytes: 42 }
+      ];
+
+      function toUtf8Bytes(str) {
+        var utf8 = [];
+        for (var i = 0; i < str.length; i++) {
+          var c = str.charCodeAt(i);
+          if (c < 0x80) {
+            utf8.push(c);
+          } else if (c < 0x800) {
+            utf8.push(0xc0 | (c >> 6), 0x80 | (c & 0x3f));
+          } else {
+            utf8.push(0xe0 | (c >> 12), 0x80 | ((c >> 6) & 0x3f), 0x80 | (c & 0x3f));
+          }
+        }
+        return utf8;
+      }
+
+      function pickSpec(byteLen) {
+        for (var v = 1; v <= 3; v++) {
+          if (byteLen <= SPECS[v].maxDataBytes) return SPECS[v];
+        }
+        return SPECS[3];
+      }
+
+      function buildCodewords(bytes, spec) {
+        var limited = bytes.slice(0, spec.maxDataBytes);
+        var bits = [];
+        function pushBits(val, len) {
+          for (var i = len - 1; i >= 0; i--) {
+            bits.push((val >> i) & 1);
+          }
+        }
+
+        pushBits(4, 4);
+        pushBits(limited.length, 8);
+        for (var i = 0; i < limited.length; i++) {
+          pushBits(limited[i], 8);
+        }
+
+        var capacityBits = spec.maxDataBytes * 8;
+        var terminatorLen = Math.min(4, capacityBits - bits.length);
+        if (terminatorLen > 0) pushBits(0, terminatorLen);
+        while (bits.length % 8 !== 0) bits.push(0);
+
+        var dataBytes = [];
+        for (var b = 0; b < bits.length; b += 8) {
+          var val = 0;
+          for (var k = 0; k < 8; k++) val = (val << 1) | bits[b + k];
+          dataBytes.push(val);
+        }
+
+        var padIdx = 0;
+        var pads = [0xec, 0x11];
+        while (dataBytes.length < spec.maxDataBytes) {
+          dataBytes.push(pads[padIdx % 2]);
+          padIdx++;
+        }
+
+        var ec = rsEncode(dataBytes, spec.ecBytes);
+        return dataBytes.concat(ec);
+      }
+
+      function createMatrix(size, version) {
+        var grid = Array.from({ length: size }, function () {
+          return new Array(size).fill(null);
+        });
+        var reserved = Array.from({ length: size }, function () {
+          return new Array(size).fill(false);
+        });
+
+        function putModule(r, c, dark, isReserved) {
+          if (r < 0 || r >= size || c < 0 || c >= size) return;
+          grid[r][c] = dark;
+          if (isReserved) reserved[r][c] = true;
+        }
+
+        function drawFinder(top, left) {
+          for (var dy = -1; dy <= 7; dy++) {
+            for (var dx = -1; dx <= 7; dx++) {
+              var r = top + dy;
+              var c = left + dx;
+              if (r < 0 || r >= size || c < 0 || c >= size) continue;
+              var onBorder = dy === -1 || dy === 7 || dx === -1 || dx === 7;
+              var onOuter = dy === 0 || dy === 6 || dx === 0 || dx === 6;
+              var onInner = dy >= 2 && dy <= 4 && dx >= 2 && dx <= 4;
+              putModule(r, c, !onBorder && (onOuter || onInner), true);
+            }
+          }
+        }
+
+        drawFinder(0, 0);
+        drawFinder(0, size - 7);
+        drawFinder(size - 7, 0);
+
+        if (version >= 2) {
+          var alignCenter = size - 7;
+          for (var ar = -2; ar <= 2; ar++) {
+            for (var ac = -2; ac <= 2; ac++) {
+              var isDark = Math.abs(ar) === 2 || Math.abs(ac) === 2 || (ar === 0 && ac === 0);
+              putModule(alignCenter + ar, alignCenter + ac, isDark, true);
+            }
+          }
+        }
+
+        for (var i = 8; i < size - 8; i++) {
+          var dark = (i % 2 === 0);
+          if (!reserved[6][i]) putModule(6, i, dark, true);
+          if (!reserved[i][6]) putModule(i, 6, dark, true);
+        }
+
+        putModule(size - 8, 8, true, true);
+
+        for (var f = 0; f < 9; f++) {
+          if (f !== 6) {
+            reserved[8][f] = true;
+            reserved[f][8] = true;
+          }
+        }
+        for (var f2 = 0; f2 < 8; f2++) {
+          reserved[8][size - 1 - f2] = true;
+          reserved[size - 1 - f2][8] = true;
+        }
+
+        return { grid: grid, reserved: reserved };
+      }
+
+      function placeDataBits(mat, codewords) {
+        var size = mat.grid.length;
+        var bitList = [];
+        for (var i = 0; i < codewords.length; i++) {
+          for (var b = 7; b >= 0; b--) {
+            bitList.push((codewords[i] >> b) & 1);
+          }
+        }
+
+        var idx = 0;
+        var dirUp = true;
+        for (var col = size - 1; col >= 1; col -= 2) {
+          if (col === 6) col = 5;
+          var rowStart = dirUp ? size - 1 : 0;
+          var rowEnd = dirUp ? -1 : size;
+          var step = dirUp ? -1 : 1;
+
+          for (var row = rowStart; row !== rowEnd; row += step) {
+            for (var cOffset = 0; cOffset < 2; cOffset++) {
+              var c = col - cOffset;
+              if (!mat.reserved[row][c]) {
+                var bit = idx < bitList.length ? bitList[idx] : 0;
+                if ((row + col) % 2 === 0) bit ^= 1;
+                mat.grid[row][c] = bit === 1;
+                idx++;
+              }
+            }
+          }
+          dirUp = !dirUp;
+        }
+      }
+
+      function writeFormatInfo(mat) {
+        var formatBits = 0x5412;
+        var size = mat.grid.length;
+
+        var coordsA = [
+          [8, 0], [8, 1], [8, 2], [8, 3], [8, 4], [8, 5], [8, 7], [8, 8],
+          [7, 8], [5, 8], [4, 8], [3, 8], [2, 8], [1, 8], [0, 8]
+        ];
+        for (var i = 0; i < 15; i++) {
+          var bit = ((formatBits >> (14 - i)) & 1) === 1;
+          mat.grid[coordsA[i][0]][coordsA[i][1]] = bit;
+        }
+
+        var coordsB = [
+          [size - 1, 8], [size - 2, 8], [size - 3, 8], [size - 4, 8],
+          [size - 5, 8], [size - 6, 8], [size - 7, 8],
+          [8, size - 8], [8, size - 7], [8, size - 6], [8, size - 5],
+          [8, size - 4], [8, size - 3], [8, size - 2], [8, size - 1]
+        ];
+        for (var j = 0; j < 15; j++) {
+          var bitB = ((formatBits >> (14 - j)) & 1) === 1;
+          mat.grid[coordsB[j][0]][coordsB[j][1]] = bitB;
+        }
+      }
+
+      window.buildQrUrl = function (codeText) {
+        var clean = String(codeText || "").trim();
+        if (!clean) clean = "PROFORMA";
+        var bytes = toUtf8Bytes(clean);
+        var spec = pickSpec(bytes.length);
+        var codewords = buildCodewords(bytes, spec);
+        var mat = createMatrix(spec.size, spec.version);
+        placeDataBits(mat, codewords);
+        writeFormatInfo(mat);
+
+        // Quiet zone de 2 modulos alrededor para facilitar lectura con camara
+        var quiet = 2;
+        var totalDim = spec.size + quiet * 2;
+        var rects = "";
+        for (var r = 0; r < spec.size; r++) {
+          for (var c = 0; c < spec.size; c++) {
+            if (mat.grid[r][c]) {
+              rects += '<rect x="' + (c + quiet) + '" y="' + (r + quiet) + '" width="1" height="1" fill="#000"/>';
+            }
+          }
+        }
+
+        var svg =
+          '<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 ' +
+          totalDim +
+          " " +
+          totalDim +
+          '" shape-rendering="crispEdges">' +
+          '<rect width="100%" height="100%" fill="#fff"/>' +
+          rects +
+          "</svg>";
+
+        return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+      };
+    })();
 
     function buildReceiptHtml(info) {
       var isProforma = info.modo === "PROFORMA";
@@ -1935,7 +2160,7 @@
         ? (
             '<div class="rcpt-qr-box">' +
               '<div class="rcpt-sub">ESCANEA CON EL CELULAR PARA CARGAR</div>' +
-              '<img src="' + buildQrUrl(info.idVenta) + '" alt="QR ' + info.idVenta + '" />' +
+              '<img id="rcptQrImg" src="' + buildQrUrl(info.idVenta) + '" alt="QR ' + info.idVenta + '" />' +
               '<div class="rcpt-qr-code">' + info.idVenta + "</div>" +
             "</div>"
           )
@@ -2267,7 +2492,10 @@
     };
     el("btnCamera").onclick = startCameraScanner;
     el("btnStopCam").onclick = stopCameraScanner;
-    el("filterInput").oninput = renderCatalog;
+    el("filterInput").oninput = function () {
+      clearTimeout(filterDebounceTimer);
+      filterDebounceTimer = setTimeout(renderCatalog, 90);
+    };
     el("btnSync").onclick = syncCatalog;
     el("btnClearTicket").onclick = function () {
       ticket = [];
@@ -2319,8 +2547,31 @@
       }
 
       playBeep(true);
-      el("printReceiptArea").innerHTML = buildReceiptHtml(dataToPrint);
-      window.print();
+      var printArea = el("printReceiptArea");
+      printArea.innerHTML = buildReceiptHtml(dataToPrint);
+
+      var qrImg = el("rcptQrImg");
+      if (qrImg) {
+        var printed = false;
+        var doPrintOnce = function () {
+          if (printed) return;
+          printed = true;
+          requestAnimationFrame(function () {
+            setTimeout(function () { window.print(); }, 60);
+          });
+        };
+        if (typeof qrImg.decode === "function") {
+          qrImg.decode().then(doPrintOnce).catch(doPrintOnce);
+        } else if (qrImg.complete) {
+          doPrintOnce();
+        } else {
+          qrImg.onload = doPrintOnce;
+          qrImg.onerror = doPrintOnce;
+        }
+        setTimeout(doPrintOnce, 250);
+      } else {
+        window.print();
+      }
     };
 
     el("cashReceived").oninput = function () {
@@ -2380,6 +2631,7 @@
     updateLiveClock();
     setInterval(updateLiveClock, 1000);
     saveVendors();
+    rebuildCatalogIndex();
     renderCatalog();
     applyModeUI();
     syncCatalog();
