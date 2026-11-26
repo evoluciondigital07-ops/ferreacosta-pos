@@ -2061,15 +2061,22 @@
 
       var recibidoInput = parseFloat(el("cashReceived").value);
       var efectivoRecibido = isProforma
-        ? total
-        : (isFinite(recibidoInput) && recibidoInput > 0 ? recibidoInput : total);
-      var cambio = isProforma ? 0 : Math.max(0, efectivoRecibido - total);
+  ? total
+  : (isFinite(recibidoInput) ? recibidoInput : 0);
 
-      if (!isProforma && metodo === "Efectivo" && efectivoRecibido < total) {
-        playBeep(false);
-        showToast("Faltan " + fmtMoney(total - efectivoRecibido) + " para completar el pago", true);
-        return;
-      }
+if (!isProforma && metodo === "Efectivo" && efectivoRecibido <= 0) {
+  playBeep(false);
+  showToast("Ingresa o selecciona el monto recibido en efectivo antes de generar la venta", true);
+  return;
+}
+
+if (!isProforma && metodo === "Efectivo" && efectivoRecibido < total) {
+  playBeep(false);
+  showToast("Faltan " + fmtMoney(total - efectivoRecibido) + " para completar el pago", true);
+  return;
+}
+
+var cambio = isProforma ? 0 : Math.max(0, Number((efectivoRecibido - total).toFixed(2)));
 
       var signature = JSON.stringify({
         vendedor: el("vendedorSelect").value,
