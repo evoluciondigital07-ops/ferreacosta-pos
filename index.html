@@ -904,10 +904,10 @@
   <div id="toast" class="toast"></div>
 
   <script>
-    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzZCArLujPjGGbtJVViBbslLhcD4dpb8B0Pm4xfECm_dZ1abcjJDk9_Gk-bjXeeMZ_B/exec";
+    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwIHsEMkVfI-dAglcSlxvUK3mKTNH1QAob1YeHIpynsW7ZgAUELerMcZumEum3eQ2zh/exec";
     var IVA_RATE = 0.15;
     var APLICAR_IVA_A_PRECIOS = false;
-    var SCAN_COOLDOWN_MS = 1800;
+    var SCAN_COOLDOWN_MS = 2200;
 
     var DEFAULT_VENDORS = ["Vendedor 1", "Vendedor 2", "Vendedor 3"];
     var SAMPLE_CATALOG = [
@@ -942,7 +942,8 @@
     var isSavingInventory = false;
     var lastSaleSignature = "";
     var lastSaleTimestamp = 0;
-var loadedProformaId = "";
+    var loadedProformaId = "";
+
     function el(id) {
       return document.getElementById(id);
     }
@@ -1149,15 +1150,21 @@ var loadedProformaId = "";
         proformaData = savedProformas["P-" + normalized];
         if (proformaData) normalized = "P-" + normalized;
       }
-if (proformaData && (proformaData.estado === "Canjeada" || proformaData.canjeada === true)) {
-      if (typeof playBeep === "function") playBeep(false);
-      if (typeof showToast === "function") {
-        showToast("La proforma " + normalized + " ya fue canjeada/vendida.", true);
-      }
-      return false;
-    }
-      if (!proformaData || !Array.isArray(proformaData.items) || !proformaData.items.length) {
+
+      if (!proformaData) {
         return false;
+      }
+
+      if (proformaData.estado === "Canjeada" || proformaData.canjeada === true) {
+        playBeep(false);
+        showToast("La proforma " + normalized + " ya fue canjeada/vendida.", true);
+        return true;
+      }
+
+      if (!Array.isArray(proformaData.items) || !proformaData.items.length) {
+        playBeep(false);
+        showToast("La proforma " + normalized + " no tiene productos (0 und).", true);
+        return true;
       }
 
       var now = Date.now();
@@ -1170,13 +1177,19 @@ if (proformaData && (proformaData.estado === "Canjeada" || proformaData.canjeada
       lastScanCode = normKey;
       lastScanTime = now;
 
+      var prevTicket = ticket.slice();
+      var prevProformaId = loadedProformaId;
       mode = "VENTA";
       applyModeUI();
       ticket = [];
-loadedProformaId = normalized;
+      loadedProformaId = normalized;
+
       var addedCount = 0;
       for (var i = 0; i < proformaData.items.length; i++) {
         var pItem = proformaData.items[i];
+        var qtyToAdd = Number(pItem.cant) || 0;
+        if (qtyToAdd <= 0) continue;
+
         var catProd = findCatalogItemBySku(pItem.sku);
         var sourceProd = catProd || {
           sku: pItem.sku,
@@ -1185,7 +1198,7 @@ loadedProformaId = normalized;
           unidad: pItem.unidad || "und",
           stock: null
         };
-        var qtyToAdd = Number(pItem.cant) || 1;
+
         for (var q = 0; q < qtyToAdd; q++) {
           var prevLen = ticket.length;
           var prevQty = 0;
@@ -1211,11 +1224,21 @@ loadedProformaId = normalized;
         }
       }
 
+      if (!addedCount || Number(addedCount) <= 0) {
+        ticket = prevTicket;
+        loadedProformaId = prevProformaId;
+        renderTicket();
+        setTimeout(function () { scanBusy = false; }, 500);
+        playBeep(false);
+        showToast("La proforma " + normalized + " no tiene unidades válidas (0 und).", true);
+        return true;
+      }
+
       playBeep(true);
       flashScannerHit("Proforma " + normalized);
       if (clearInputOnMatch) el("scanInput").value = "";
       showToast("Proforma " + normalized + " cargada (" + addedCount + " und)");
-      setTimeout(function () { scanBusy = false; }, 350);
+      setTimeout(function () { scanBusy = false; }, 600);
       return true;
     }
 
@@ -1276,10 +1299,10 @@ loadedProformaId = normalized;
           estado: "Pendiente"
         });
       }
+
       playBeep(true);
       renderInventoryCount();
     }
-
     function renderInventoryCount() {
       var wrap = el("invList");
       if (!wrap) return;
@@ -1424,34 +1447,22 @@ loadedProformaId = normalized;
           isSavingInventory = false;
           el("btnSaveInvOnly").disabled = false;
           el("btnApplyInvStock").disabled = false;
-        }, 900);
+        }, 500);
       }
 
-      if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf("REEMPLAZA_CON_TU_URL") !== -1) {
-        doneInv(
-          (applyStock ? "Conteo " + idConteo + " guardado y stock actualizado" : "Conteo " + idConteo + " guardado") + " (Modo Local)",
-          false
-        );
-        return;
-      }
+      doneInv(
+        (applyStock ? "Conteo " + idConteo + " guardado y stock actualizado" : "Conteo " + idConteo + " guardado"),
+        false
+      );
 
-      fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(payload)
-      }).then(function () {
-        doneInv(
-          applyStock ? "Conteo " + idConteo + " guardado y stock actualizado en Sheets" : "Conteo " + idConteo + " guardado en Sheets",
-          false
-        );
-      }).catch(function () {
-        isSavingInventory = false;
-        el("btnSaveInvOnly").disabled = false;
-        el("btnApplyInvStock").disabled = false;
-        playBeep(false);
-        showToast("Error al guardar el conteo de inventario", true);
-      });
+      if (APPS_SCRIPT_URL && APPS_SCRIPT_URL.indexOf("REEMPLAZA_CON_TU_URL") === -1) {
+        fetch(APPS_SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(payload)
+        }).catch(function () {});
+      }
     }
 
     function toggleSection(panelId, arrowId) {
@@ -1513,6 +1524,7 @@ loadedProformaId = normalized;
       }
       el("newVendorName").value = "";
       saveVendors(name);
+      showToast("Vendedor añadido: " + name);
 
       if (APPS_SCRIPT_URL && APPS_SCRIPT_URL.indexOf("REEMPLAZA_CON_TU_URL") === -1) {
         fetch(APPS_SCRIPT_URL, {
@@ -1520,14 +1532,8 @@ loadedProformaId = normalized;
           mode: "no-cors",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify({ action: "add_vendor", vendor: name })
-        }).then(function () {
-          showToast("Vendedor guardado en Sheets: " + name);
-        }).catch(function () {
-          showToast("Vendedor añadido: " + name);
-        });
-        return;
+        }).catch(function () {});
       }
-      showToast("Vendedor añadido: " + name);
     }
 
     function renderCatalog() {
@@ -1639,47 +1645,65 @@ loadedProformaId = normalized;
       var silentNotFound = !!options.silentNotFound;
       var clearInputOnMatch = options.clearInputOnMatch !== false;
       var code = String(rawCode || "").trim();
-      if (!code || scanBusy) return false;
+      if (!code || scanBusy || isGeneratingSale) return false;
 
       if (mode !== "INVENTARIO" && loadProformaIntoTicket(code, clearInputOnMatch)) {
         return true;
       }
 
       if (mode !== "INVENTARIO" && code.toUpperCase().indexOf("P-") === 0) {
-      var upperCode = code.toUpperCase();
-      if (typeof APPS_SCRIPT_URL === "string" && APPS_SCRIPT_URL) {
-        if (!silentNotFound) {
-          showToast("Buscando proforma en la nube: " + upperCode + "...", false);
+        var upperCode = code.toUpperCase();
+        var cachedProf = savedProformas[upperCode];
+        if (cachedProf && (cachedProf.estado === "Canjeada" || cachedProf.canjeada === true)) {
+          playBeep(false);
+          showToast("La proforma " + upperCode + " ya fue canjeada/vendida.", true);
+          return true;
         }
-        fetch(APPS_SCRIPT_URL + "?action=get_proforma&id=" + encodeURIComponent(upperCode))
-          .then(function (res) { return res.json(); })
-          .then(function (data) {
-            if (data && data.ok && data.proforma) {
-              savedProformas[upperCode] = data.proforma;
-              if (typeof persistProformas === "function") {
+
+        if (typeof APPS_SCRIPT_URL === "string" && APPS_SCRIPT_URL && APPS_SCRIPT_URL.indexOf("REEMPLAZA_CON_TU_URL") === -1) {
+          scanBusy = true;
+          if (!silentNotFound) {
+            showToast("Buscando proforma en la nube: " + upperCode + "...", false);
+          }
+          fetch(APPS_SCRIPT_URL + "?action=get_proforma&id=" + encodeURIComponent(upperCode))
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+              scanBusy = false;
+              if (data && data.ok && data.proforma) {
+                var validItems = Array.isArray(data.proforma.items)
+                  ? data.proforma.items.filter(function (it) { return (Number(it.cant) || 0) > 0; })
+                  : [];
+                if (!validItems.length) {
+                  playBeep(false);
+                  showToast("La proforma " + upperCode + " no tiene unidades válidas (0 und).", true);
+                  return;
+                }
+                data.proforma.items = validItems;
+                savedProformas[upperCode] = data.proforma;
                 persistProformas();
+                loadProformaIntoTicket(upperCode, clearInputOnMatch);
+              } else if (!silentNotFound) {
+                playBeep(false);
+                showToast("Proforma no encontrada: " + upperCode, true);
               }
-              loadProformaIntoTicket(upperCode, clearInputOnMatch);
-            } else if (!silentNotFound) {
-              playBeep(false);
-              showToast("Proforma no encontrada: " + upperCode, true);
-            }
-          })
-          .catch(function () {
-            if (!silentNotFound) {
-              playBeep(false);
-              showToast("Proforma no encontrada en este equipo: " + upperCode, true);
-            }
-          });
-        return true;
+            })
+            .catch(function () {
+              scanBusy = false;
+              if (!silentNotFound) {
+                playBeep(false);
+                showToast("Proforma no encontrada en este equipo: " + upperCode, true);
+              }
+            });
+          return true;
+        }
+
+        if (!silentNotFound) {
+          playBeep(false);
+          showToast("Proforma no encontrada en este equipo: " + upperCode, true);
+        }
+        return false;
       }
 
-      if (!silentNotFound) {
-        playBeep(false);
-        showToast("Proforma no encontrada en este equipo: " + upperCode, true);
-      }
-      return false;
-    }
       var now = Date.now();
       var normCode = code.toLowerCase();
       if (normCode === lastScanCode && now - lastScanTime < SCAN_COOLDOWN_MS) {
@@ -1707,7 +1731,7 @@ loadedProformaId = normalized;
         }
         flashScannerHit(match.nombre);
         if (clearInputOnMatch) el("scanInput").value = "";
-        setTimeout(function () { scanBusy = false; }, 350);
+        setTimeout(function () { scanBusy = false; }, 500);
         return true;
       }
 
@@ -1718,7 +1742,7 @@ loadedProformaId = normalized;
         addProductToInventoryCount(code.toUpperCase(), 1);
         flashScannerHit("Sin_SKU: " + code.toUpperCase());
         if (clearInputOnMatch) el("scanInput").value = "";
-        setTimeout(function () { scanBusy = false; }, 350);
+        setTimeout(function () { scanBusy = false; }, 500);
         return true;
       }
 
@@ -1780,6 +1804,17 @@ loadedProformaId = normalized;
       document.querySelectorAll(".bill-btn").forEach(function (b) { b.classList.remove("selected"); });
       refreshDenomSummary();
       updateChangeCalc();
+    }
+
+    function resetTicketScreen() {
+      ticket = [];
+      loadedProformaId = "";
+      if (el("scanInput")) el("scanInput").value = "";
+      resetPaymentSelection();
+      renderTicket();
+      isGeneratingSale = false;
+      el("btnGenerateSale").disabled = false;
+      el("btnGenerateSale").textContent = mode === "PROFORMA" ? "Generar Proforma" : "Generar Venta";
     }
 
     function renderTicket() {
@@ -1884,25 +1919,27 @@ loadedProformaId = normalized;
           el("btnSync").textContent = "Sincronizar";
         });
     }
-    /* === GENERADOR QR REAL ESTANDAR (QRCODE-GENERATOR) === */
-window.buildQrUrl = function (codeText) {
-  var clean = String(codeText || "").trim() || "PROFORMA";
-  if (typeof window.qrcode === "function") {
-    var qr = window.qrcode(0, "M");
-    qr.addData(clean);
-    qr.make();
-    return qr.createDataURL(6, 4);
-  }
 
-  var svg =
-    '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 21 21" shape-rendering="crispEdges">' +
-    '<rect width="21" height="21" fill="#fff"/>' +
-    '<rect x="1" y="1" width="7" height="7" fill="#000"/><rect x="2" y="2" width="5" height="5" fill="#fff"/><rect x="3" y="3" width="3" height="3" fill="#000"/>' +
-    '<rect x="13" y="1" width="7" height="7" fill="#000"/><rect x="14" y="2" width="5" height="5" fill="#fff"/><rect x="15" y="3" width="3" height="3" fill="#000"/>' +
-    '<rect x="1" y="13" width="7" height="7" fill="#000"/><rect x="2" y="14" width="5" height="5" fill="#fff"/><rect x="3" y="15" width="3" height="3" fill="#000"/>' +
-    "</svg>";
-  return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
-};
+    /* === GENERADOR QR REAL ESTANDAR (QRCODE-GENERATOR) === */
+    window.buildQrUrl = function (codeText) {
+      var clean = String(codeText || "").trim() || "PROFORMA";
+      if (typeof window.qrcode === "function") {
+        var qr = window.qrcode(0, "M");
+        qr.addData(clean);
+        qr.make();
+        return qr.createDataURL(6, 4);
+      }
+
+      var svg =
+        '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 21 21" shape-rendering="crispEdges">' +
+        '<rect width="21" height="21" fill="#fff"/>' +
+        '<rect x="1" y="1" width="7" height="7" fill="#000"/><rect x="2" y="2" width="5" height="5" fill="#fff"/><rect x="3" y="3" width="3" height="3" fill="#000"/>' +
+        '<rect x="13" y="1" width="7" height="7" fill="#000"/><rect x="14" y="2" width="5" height="5" fill="#fff"/><rect x="15" y="3" width="3" height="3" fill="#000"/>' +
+        '<rect x="1" y="13" width="7" height="7" fill="#000"/><rect x="2" y="14" width="5" height="5" fill="#fff"/><rect x="3" y="15" width="3" height="3" fill="#000"/>' +
+        "</svg>";
+      return "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+    };
+
     function buildReceiptHtml(info) {
       var isProforma = info.modo === "PROFORMA";
       var rowsHtml = "";
@@ -1982,15 +2019,31 @@ window.buildQrUrl = function (codeText) {
 
     function generateSale() {
       if (isGeneratingSale) return;
-      if (!ticket.length) {
-        showToast("Agrega al menos un producto al ticket", true);
+      var isProforma = mode === "PROFORMA";
+      var totals = getTotals();
+      var subtotal = totals.subtotal;
+      var iva = totals.iva;
+      var total = totals.total;
+
+      var validTicketItems = Array.isArray(ticket)
+        ? ticket.filter(function (i) { return (Number(i.cant) || 0) > 0; })
+        : [];
+
+      if (!validTicketItems.length || total <= 0) {
+        playBeep(false);
+        showToast(isProforma ? "Agrega productos con cantidad mayor a 0 para la proforma" : "No se puede generar una venta en $0.00 o sin productos", true);
         return;
       }
 
-      var isProforma = mode === "PROFORMA";
+      if (!isProforma && loadedProformaId && savedProformas[loadedProformaId] &&
+          (savedProformas[loadedProformaId].estado === "Canjeada" || savedProformas[loadedProformaId].canjeada === true)) {
+        playBeep(false);
+        showToast("La proforma " + loadedProformaId + " ya fue canjeada anteriormente.", true);
+        return;
+      }
 
-      for (var k = 0; k < ticket.length; k++) {
-        var tItem = ticket[k];
+      for (var k = 0; k < validTicketItems.length; k++) {
+        var tItem = validTicketItems[k];
         var stkCheck = getStockQty(tItem);
         var unitDisp = formatUnitLabel(tItem.unidad);
         if (stkCheck !== null && (stkCheck <= 0 || tItem.cant > stkCheck)) {
@@ -1999,27 +2052,21 @@ window.buildQrUrl = function (codeText) {
         }
       }
 
-      var totals = getTotals();
-      var subtotal = totals.subtotal;
-      var iva = totals.iva;
-      var total = totals.total;
-      var metodo = isProforma ? "Proforma" : el("payMethod").value;
+      var metodo = isProforma ? "Proforma" : String(el("payMethod").value || "").trim();
+      if (!isProforma && (!metodo || metodo === "Sin seleccionar" || metodo === "Seleccionar" || metodo === "NONE")) {
+        playBeep(false);
+        showToast("Selecciona un método de pago antes de generar la venta.", true);
+        return;
+      }
+
       var recibidoInput = parseFloat(el("cashReceived").value);
       var efectivoRecibido = isProforma
         ? total
         : (isFinite(recibidoInput) && recibidoInput > 0 ? recibidoInput : total);
       var cambio = isProforma ? 0 : Math.max(0, efectivoRecibido - total);
-if (!isProforma) {
-          if (!(typeof total === "number") || total <= 0) {
-            showToast("El ticket está en $0.00. Agrega productos antes de generar la venta.", true);
-            return;
-          }
-          if (!metodo || metodo === "Sin seleccionar" || metodo === "Seleccionar" || metodo === "NONE") {
-            showToast("Selecciona el método de pago antes de generar la venta.", true);
-            return;
-          }
-        }
+
       if (!isProforma && metodo === "Efectivo" && efectivoRecibido < total) {
+        playBeep(false);
         showToast("Faltan " + fmtMoney(total - efectivoRecibido) + " para completar el pago", true);
         return;
       }
@@ -2028,24 +2075,27 @@ if (!isProforma) {
         vendedor: el("vendedorSelect").value,
         modo: mode,
         total: total.toFixed(2),
-        items: ticket.map(function (i) { return i.sku + ":" + i.cant; })
+        items: validTicketItems.map(function (i) { return i.sku + ":" + i.cant; })
       });
       var saleDate = new Date();
       var nowMs = saleDate.getTime();
-      if (signature === lastSaleSignature && nowMs - lastSaleTimestamp < 4000) {
+      if (signature === lastSaleSignature && nowMs - lastSaleTimestamp < 3000) {
         showToast("Operación ya generada hace un momento; evita repetirla", true);
         return;
       }
 
       isGeneratingSale = true;
+      scanBusy = true;
+      lastScanCode = "";
+      lastScanTime = nowMs;
       el("btnGenerateSale").disabled = true;
-      el("btnGenerateSale").textContent = "Generando...";
+      el("btnGenerateSale").textContent = "Procesando...";
 
       var prefix = isProforma ? "P-" : "V-";
       var idDoc = prefix + String(nowMs).slice(-6);
       var vendedorActual = el("vendedorSelect").value || "Vendedor 1";
       var cajaActual = el("cajaSelect").value || "Caja Principal";
-      var mappedItems = ticket.map(function (i) {
+      var mappedItems = validTicketItems.map(function (i) {
         var uPrice = Number(i.precio) || 0;
         return {
           sku: i.sku,
@@ -2073,45 +2123,28 @@ if (!isProforma) {
       };
 
       if (isProforma) {
-          savedProformas[idDoc] = {
-            idProforma: idDoc,
-            fechaHora: lastReceiptInfo.fechaHora,
-            vendedor: vendedorActual,
-            caja: cajaActual,
-            total: total,
-            items: mappedItems
-          };
-          persistProformas();
-          if (typeof APPS_SCRIPT_URL === "string" && APPS_SCRIPT_URL) {
-            fetch(APPS_SCRIPT_URL, {
-              method: "POST",
-              mode: "no-cors",
-              headers: { "Content-Type": "text/plain;charset=utf-8" },
-              body: JSON.stringify({
-                id_venta: idDoc,
-                fecha_hora: saleDate.toISOString(),
-                caja: cajaActual,
-                vendedor: vendedorActual,
-                modo: "PROFORMA",
-                estado: "Proforma",
-                subtotal: subtotal,
-                iva: iva,
-                total: total,
-                items: mappedItems
-              })
-            }).catch(function () {});
-          }
+        savedProformas[idDoc] = {
+          idProforma: idDoc,
+          fechaHora: lastReceiptInfo.fechaHora,
+          vendedor: vendedorActual,
+          caja: cajaActual,
+          total: total,
+          estado: "Activa",
+          canjeada: false,
+          items: mappedItems
+        };
+        persistProformas();
+      } else if (loadedProformaId) {
+        if (!savedProformas[loadedProformaId]) {
+          savedProformas[loadedProformaId] = { idProforma: loadedProformaId, items: mappedItems };
         }
-      if (!isProforma && loadedProformaId) {
-          if (savedProformas[loadedProformaId]) {
-            savedProformas[loadedProformaId].estado = "Canjeada";
-            savedProformas[loadedProformaId].canjeadaEn = saleDate.toISOString();
-            if (typeof persistProformas === "function") {
-              persistProformas();
-            }
-          }
-          loadedProformaId = "";
-        }
+        savedProformas[loadedProformaId].estado = "Canjeada";
+        savedProformas[loadedProformaId].canjeada = true;
+        savedProformas[loadedProformaId].canjeadaEn = saleDate.toISOString();
+        savedProformas[loadedProformaId].ventaId = idDoc;
+        persistProformas();
+      }
+
       var payload = {
         id_venta: idDoc,
         fecha_hora: saleDate.toISOString(),
@@ -2128,60 +2161,39 @@ if (!isProforma) {
         total: Number(total.toFixed(2)),
         efectivo_recibido: Number(efectivoRecibido.toFixed(2)),
         cambio: Number(cambio.toFixed(2)),
-        items: ticket.map(function (i) {
-          var uPrice = Number(i.precio) || 0;
+        items: mappedItems.map(function (i) {
           return {
             sku: i.sku,
             nombre: i.nombre,
             cant: i.cant,
-            precio: Number(uPrice.toFixed(2)),
-            subtotal: Number((i.cant * uPrice).toFixed(2))
+            precio: Number(i.precio.toFixed(2)),
+            subtotal: Number(i.subtotal.toFixed(2))
           };
         })
       };
 
-      function finishSaleUI(msg, isErr) {
-        lastSaleSignature = signature;
-        lastSaleTimestamp = Date.now();
-        playBeep(!isErr);
-        showToast(msg, !!isErr);
-        if (!isErr) {
-          ticket = [];
-          resetPaymentSelection();
-          renderTicket();
-        }
-        setTimeout(function () {
-          isGeneratingSale = false;
-          el("btnGenerateSale").disabled = false;
-          el("btnGenerateSale").textContent = mode === "PROFORMA" ? "Generar Proforma" : "Generar Venta";
-        }, 1200);
-      }
+      lastSaleSignature = signature;
+      lastSaleTimestamp = Date.now();
+      playBeep(true);
+      showToast(
+        isProforma
+          ? "Proforma " + idDoc + " generada (QR listo)"
+          : "Venta " + idDoc + " generada - Cambio: " + fmtMoney(cambio),
+        false
+      );
+      resetTicketScreen();
+      setTimeout(function () { scanBusy = false; }, SCAN_COOLDOWN_MS);
 
-      if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf("REEMPLAZA_CON_TU_URL") !== -1) {
-        finishSaleUI(
-          (isProforma ? "Proforma " + idDoc + " generada (QR listo)" : "Venta " + idDoc + " generada - Cambio: " + fmtMoney(cambio)) + " (Modo Local)",
-          false
-        );
-        return;
+      if (APPS_SCRIPT_URL && APPS_SCRIPT_URL.indexOf("REEMPLAZA_CON_TU_URL") === -1) {
+        fetch(APPS_SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(payload)
+        }).catch(function () {
+          showToast("Comprobante listo; reintento de red pendiente", true);
+        });
       }
-
-      fetch(APPS_SCRIPT_URL, {
-        method: "POST",
-        mode: "no-cors",
-        headers: { "Content-Type": "text/plain;charset=utf-8" },
-        body: JSON.stringify(payload)
-      }).then(function () {
-        finishSaleUI(
-          isProforma ? "Proforma " + idDoc + " generada (QR listo)" : "Venta " + idDoc + " generada - Cambio: " + fmtMoney(cambio),
-          false
-        );
-      }).catch(function () {
-        isGeneratingSale = false;
-        el("btnGenerateSale").disabled = false;
-        el("btnGenerateSale").textContent = mode === "PROFORMA" ? "Generar Proforma" : "Generar Venta";
-        playBeep(false);
-        showToast("Error al generar el comprobante", true);
-      });
     }
 
     function startCameraScanner() {
@@ -2202,7 +2214,18 @@ if (!isProforma) {
                 if (!streamRef) return;
                 detector.detect(video).then(function (codes) {
                   if (codes && codes.length > 0 && codes[0].rawValue) {
-                    handleCodeLookup(codes[0].rawValue, { silentNotFound: false, clearInputOnMatch: false });
+                    var scannedCode = String(codes[0].rawValue || "").trim();
+                    var nowScan = Date.now();
+                    if (
+                      scanBusy ||
+                      isGeneratingSale ||
+                      !scannedCode ||
+                      (scannedCode.toLowerCase() === lastScanCode && (nowScan - lastScanTime) < SCAN_COOLDOWN_MS) ||
+                      (nowScan - lastScanTime) < 800
+                    ) {
+                      return;
+                    }
+                    handleCodeLookup(scannedCode, { silentNotFound: false, clearInputOnMatch: false });
                   }
                 }).catch(function () {});
                 scanLoopId = requestAnimationFrame(tick);
@@ -2218,7 +2241,18 @@ if (!isProforma) {
         el("scannerStatus").textContent = "Escáner láser activo con ZXing...";
         zxingReader.decodeFromVideoDevice(null, "scannerVideo", function (result) {
           if (result && result.getText()) {
-            handleCodeLookup(result.getText(), { silentNotFound: false, clearInputOnMatch: false });
+            var zCode = String(result.getText() || "").trim();
+            var zNow = Date.now();
+            if (
+              scanBusy ||
+              isGeneratingSale ||
+              !zCode ||
+              (zCode.toLowerCase() === lastScanCode && (zNow - lastScanTime) < SCAN_COOLDOWN_MS) ||
+              (zNow - lastScanTime) < 800
+            ) {
+              return;
+            }
+            handleCodeLookup(zCode, { silentNotFound: false, clearInputOnMatch: false });
           }
         }).catch(function () {
           el("scannerStatus").textContent = "No se pudo iniciar la cámara.";
@@ -2315,6 +2349,7 @@ if (!isProforma) {
     el("btnSync").onclick = syncCatalog;
     el("btnClearTicket").onclick = function () {
       ticket = [];
+      loadedProformaId = "";
       resetPaymentSelection();
       renderTicket();
     };
