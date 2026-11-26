@@ -2099,7 +2099,10 @@ var cambio = isProforma ? 0 : Math.max(0, Number((efectivoRecibido - total).toFi
       el("btnGenerateSale").textContent = "Procesando...";
 
       var prefix = isProforma ? "P-" : "V-";
-      var idDoc = prefix + String(nowMs).slice(-6);
+      var seqKey = isProforma ? "fa_seq_proforma" : "fa_seq_venta";
+var nextSeq = (parseInt(localStorage.getItem(seqKey) || "0", 10) || 0) + 1;
+localStorage.setItem(seqKey, String(nextSeq));
+var idDoc = prefix + String(nextSeq).padStart(6, "0");
       var vendedorActual = el("vendedorSelect").value || "Vendedor 1";
       var cajaActual = el("cajaSelect").value || "Caja Principal";
       var mappedItems = validTicketItems.map(function (i) {
