@@ -904,7 +904,7 @@
   <div id="toast" class="toast"></div>
 
   <script>
-    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwxiou5U7nxvQIZxL1BTEj10SJRtOfFKeh5gj-at-ucAB3uNGz_wZhhxbFNEje22dNG/exec";
+    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyUaGlUkK9pBzeC2VmmOlqMKaLlnWF8A1Sj8YC_r5UhQ77KyWPw-tUZqKzLCg_XX82B/exec";
     var IVA_RATE = 0.15;
     var APLICAR_IVA_A_PRECIOS = false;
     var SCAN_COOLDOWN_MS = 1800;
@@ -1210,12 +1210,7 @@ loadedProformaId = normalized;
           }
         }
       }
-if (!addedCount || Number(addedCount) <= 0) {
-          setTimeout(function () { scanBusy = false; }, 400);
-          playBeep(false);
-          showToast("La proforma " + normalized + " no tiene unidades válidas (0 und).", true);
-          return false;
-        }
+
       playBeep(true);
       flashScannerHit("Proforma " + normalized);
       if (clearInputOnMatch) el("scanInput").value = "";
@@ -2117,34 +2112,6 @@ if (!isProforma) {
           }
           loadedProformaId = "";
         }
-      var safeTotal = Number(total) || 0;
-        var safeMetodo = String(metodo || "").trim();
-        if (!isProforma) {
-          if (!ticket || ticket.length === 0 || safeTotal <= 0) {
-            isGeneratingSale = false;
-            el("btnGenerateSale").disabled = false;
-            el("btnGenerateSale").textContent = "Generar Venta";
-            playBeep(false);
-            showToast("No se puede generar una venta en $0.00 o sin productos.", true);
-            return;
-          }
-          if (!safeMetodo) {
-            isGeneratingSale = false;
-            el("btnGenerateSale").disabled = false;
-            el("btnGenerateSale").textContent = "Generar Venta";
-            playBeep(false);
-            showToast("Selecciona un método de pago antes de generar la venta.", true);
-            return;
-          }
-          if (loadedProformaId && savedProformas && savedProformas[loadedProformaId] && savedProformas[loadedProformaId].estado === "Canjeada") {
-            isGeneratingSale = false;
-            el("btnGenerateSale").disabled = false;
-            el("btnGenerateSale").textContent = "Generar Venta";
-            playBeep(false);
-            showToast("Esta proforma ya fue canjeada anteriormente.", true);
-            return;
-          }
-        }
       var payload = {
         id_venta: idDoc,
         fecha_hora: saleDate.toISOString(),
@@ -2197,10 +2164,7 @@ if (!isProforma) {
         );
         return;
       }
-finishSaleUI(
-       isProforma ? "Proforma " + idDoc + " generada (QR listo)" : "Venta " + idDoc + " generada - Cambio: " + fmtMoney(cambio),
-       false
-     );
+
       fetch(APPS_SCRIPT_URL, {
         method: "POST",
         mode: "no-cors",
@@ -2211,19 +2175,13 @@ finishSaleUI(
           isProforma ? "Proforma " + idDoc + " generada (QR listo)" : "Venta " + idDoc + " generada - Cambio: " + fmtMoney(cambio),
           false
         );
-        fetch(APPS_SCRIPT_URL, {
-          method: "POST",
-          mode: "no-cors",
-          headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify(payload)
-        }).then(function () {
-        }).catch(function () {
-          isGeneratingSale = false;
-          el("btnGenerateSale").disabled = false;
-          el("btnGenerateSale").textContent = mode === "PROFORMA" ? "Generar Proforma" : "Generar Venta";
-          showToast("Comprobante listo; reintentando envío a Sheets...", false);
-        });
-        
+      }).catch(function () {
+        isGeneratingSale = false;
+        el("btnGenerateSale").disabled = false;
+        el("btnGenerateSale").textContent = mode === "PROFORMA" ? "Generar Proforma" : "Generar Venta";
+        playBeep(false);
+        showToast("Error al generar el comprobante", true);
+      });
     }
 
     function startCameraScanner() {
@@ -2244,17 +2202,7 @@ finishSaleUI(
                 if (!streamRef) return;
                 detector.detect(video).then(function (codes) {
                   if (codes && codes.length > 0 && codes[0].rawValue) {
-                    var scannedCode = String(codes[0].rawValue || "").trim();
-          var nowScan = Date.now();
-          if (!window._lastScanCode) window._lastScanCode = "";
-          if (!window._lastScanTime) window._lastScanTime = 0;
-          if (!scannedCode || (scannedCode === window._lastScanCode && (nowScan - window._lastScanTime) < 2500) || (nowScan - window._lastScanTime) < 800) {
-            return;
-          }
-          window._lastScanCode = scannedCode;
-          window._lastScanTime = nowScan;
-          handleCodeLookup(scannedCode, { silentNotFound: false, clearInputOnMatch: false });
-    
+                    handleCodeLookup(codes[0].rawValue, { silentNotFound: false, clearInputOnMatch: false });
                   }
                 }).catch(function () {});
                 scanLoopId = requestAnimationFrame(tick);
@@ -2270,17 +2218,7 @@ finishSaleUI(
         el("scannerStatus").textContent = "Escáner láser activo con ZXing...";
         zxingReader.decodeFromVideoDevice(null, "scannerVideo", function (result) {
           if (result && result.getText()) {
-            var zCode = String(result.getText() || "").trim();
-            var zNow = Date.now();
-            if (!window._lastScanCode) window._lastScanCode = "";
-            if (!window._lastScanTime) window._lastScanTime = 0;
-            if (!zCode || (zCode === window._lastScanCode && (zNow - window._lastScanTime) < 2500) || (zNow - window._lastScanTime) < 800) {
-              return;
-            }
-            window._lastScanCode = zCode;
-            window._lastScanTime = zNow;
-            handleCodeLookup(zCode, { silentNotFound: false, clearInputOnMatch: false });
-            
+            handleCodeLookup(result.getText(), { silentNotFound: false, clearInputOnMatch: false });
           }
         }).catch(function () {
           el("scannerStatus").textContent = "No se pudo iniciar la cámara.";
