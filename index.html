@@ -952,8 +952,8 @@
         <div id="ticketItems" class="ticket-items"></div>
 
         <div class="totals mono-num">
-          <div class="t-line"><span>Subtotal (Con IVA)</span><strong id="subVal">$0.00</strong></div>
-          <div class="t-line"><span>IVA (15%)</span><strong id="ivaVal">$0.00</strong></div>
+          <div class="t-line"><span>Subtotal (Catálogo)</span><strong id="subVal">$0.00</strong></div>
+          <div class="t-line"><span>IVA (15% en recibo)</span><strong id="ivaVal">$0.00</strong></div>
           <div class="t-grand"><span>TOTAL</span><span id="totalVal">$0.00</span></div>
         </div>
       </div>
@@ -998,8 +998,9 @@
             <button type="button" class="bill-btn" data-amt="100" data-lbl="Billete $100">$100</button>
           </div>
 
-          <div style="display:flex; gap:6px; margin-bottom:6px;">
-            <button type="button" class="bill-btn" id="btnExact" data-lbl="Exacto" style="flex:1;">Monto Exacto</button>
+          <div style="display:flex; gap:6px; margin-bottom:6px; flex-wrap:wrap;">
+            <button type="button" class="bill-btn" id="btnExact" data-lbl="Exacto" style="flex:1 1 120px;">Monto Exacto</button>
+            <button type="button" class="bill-btn" data-amt="2" data-lbl="Billete $2" style="flex:0 0 54px;">+$2</button>
           </div>
 
           <div class="denom-toolbar">
@@ -1113,6 +1114,7 @@
     var vendors = JSON.parse(localStorage.getItem("fa_vendors") || "null") || DEFAULT_VENDORS;
     var catalog = JSON.parse(localStorage.getItem("fa_catalog") || "null") || SAMPLE_CATALOG;
     var savedProformas = JSON.parse(localStorage.getItem("fa_proformas") || "{}");
+    var pendingQueue = JSON.parse(localStorage.getItem("fa_pending_queue") || "[]");
     var catalogBySku = {};
     var ticket = [];
     var invItems = [];
@@ -1138,6 +1140,40 @@
 
     function el(id) {
       return document.getElementById(id);
+    }
+
+    function persistPendingQueue() {
+      try {
+        localStorage.setItem("fa_pending_queue", JSON.stringify(pendingQueue));
+      } catch (_) {}
+    }
+
+    function enqueuePendingPayload(payloadObj) {
+      if (!payloadObj) return;
+      pendingQueue.push(payloadObj);
+      if (pendingQueue.length > 50) {
+        pendingQueue = pendingQueue.slice(pendingQueue.length - 50);
+      }
+      persistPendingQueue();
+    }
+
+    function flushPendingQueue() {
+      if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf("REEMPLAZA_CON_TU_URL") !== -1) return;
+      if (!Array.isArray(pendingQueue) || !pendingQueue.length) return;
+      var batch = pendingQueue.slice();
+      pendingQueue = [];
+      persistPendingQueue();
+
+      batch.forEach(function (item) {
+        fetch(APPS_SCRIPT_URL, {
+          method: "POST",
+          mode: "no-cors",
+          headers: { "Content-Type": "text/plain;charset=utf-8" },
+          body: JSON.stringify(item)
+        }).catch(function () {
+          enqueuePendingPayload(item);
+        });
+      });
     }
 
     function rebuildCatalogIndex() {
@@ -1330,6 +1366,32 @@
       return Number(base.toFixed(2));
     }
 
+    function applyPaymentMethodUI() {
+      var method = String((el("payMethod") && el("payMethod").value) || "Efectivo");
+      var isCashLike = method === "Efectivo" || method === "Mixto";
+      var billsBtn = el("btnToggleBills");
+      var billsPanel = el("billsCollapsible");
+      var changeBox = el("changeBox");
+      var totals = getTotals();
+
+      if (billsBtn) billsBtn.style.display = isCashLike ? "flex" : "none";
+      if (billsPanel && !isCashLike) {
+        billsPanel.classList.remove("open");
+        if (el("billsArrow")) el("billsArrow").textContent = "▼";
+      }
+
+      if (!isCashLike) {
+        if (el("cashReceived") && (!el("cashReceived").value || parseFloat(el("cashReceived").value) <= 0) && totals.total > 0) {
+          el("cashReceived").value = totals.total.toFixed(2);
+        }
+        if (changeBox) {
+          changeBox.style.opacity = "0.75";
+        }
+      } else if (changeBox) {
+        changeBox.style.opacity = "1";
+      }
+    }
+
     function applyModeUI() {
       var isProforma = mode === "PROFORMA";
       var isInventario = mode === "INVENTARIO";
@@ -1351,6 +1413,7 @@
 
       if (!isInventario) {
         el("btnGenerateSale").textContent = isProforma ? "Generar Proforma" : "Generar Venta";
+        applyPaymentMethodUI();
         renderTicket();
       } else {
         renderInventoryCount();
@@ -1650,7 +1713,7 @@
         })
       };
 
-    if (applyStock) {
+      if (applyStock) {
         for (var i = 0; i < invItems.length; i++) {
           var cItem = invItems[i];
           if (cItem.estado !== "Sin_SKU") {
@@ -1691,7 +1754,9 @@
           mode: "no-cors",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
           body: JSON.stringify(payload)
-        }).catch(function () {});
+        }).catch(function () {
+          enqueuePendingPayload(payload);
+        });
       }
     }
 
@@ -1757,12 +1822,15 @@
       showToast("Vendedor añadido: " + name);
 
       if (APPS_SCRIPT_URL && APPS_SCRIPT_URL.indexOf("REEMPLAZA_CON_TU_URL") === -1) {
+        var vPayload = { action: "add_vendor", vendor: name };
         fetch(APPS_SCRIPT_URL, {
           method: "POST",
           mode: "no-cors",
           headers: { "Content-Type": "text/plain;charset=utf-8" },
-          body: JSON.stringify({ action: "add_vendor", vendor: name })
-        }).catch(function () {});
+          body: JSON.stringify(vPayload)
+        }).catch(function () {
+          enqueuePendingPayload(vPayload);
+        });
       }
     }
 
@@ -1789,13 +1857,14 @@
         var unitFinal = getUnitPrice(p);
         var stk = getStockQty(p);
         var isEmpty = stk !== null && stk <= 0;
+        var blockOk = isEmpty && mode !== "INVENTARIO";
         var unitDisp = formatUnitLabel(p.unidad);
         var stockText = stk !== null
           ? (isEmpty ? "SIN STOCK (0 " + unitDisp + ")" : "Stock: " + stk + " " + unitDisp)
           : unitDisp;
 
         var div = document.createElement("div");
-        div.className = "prod-item" + (isEmpty && mode !== "INVENTARIO" ? " out-stock" : "");
+        div.className = "prod-item" + (blockOk ? " out-stock" : "");
         div.setAttribute("data-sku", String(p.sku || ""));
         div.innerHTML =
           '<div style="min-width:0; flex:1;">' +
@@ -1804,7 +1873,7 @@
           "</div>" +
           '<div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">' +
             '<div class="prod-price mono-num">' + fmtMoney(unitFinal) + "</div>" +
-            '<button type="button" class="btn-green btn-select-prod" data-sku="' + String(p.sku || "") + '">OK</button>' +
+            '<button type="button" class="btn-green btn-select-prod" data-sku="' + String(p.sku || "") + '"' + (blockOk ? " disabled" : "") + '>OK</button>' +
           "</div>";
         frag.appendChild(div);
         shown++;
@@ -1816,7 +1885,7 @@
 
     el("productList").addEventListener("click", function (e) {
       var btnEl = e.target.closest(".btn-select-prod");
-      if (!btnEl) return;
+      if (!btnEl || btnEl.disabled) return;
       var sku = btnEl.getAttribute("data-sku");
       var prod = findCatalogItemBySku(sku);
       if (!prod) return;
@@ -2026,11 +2095,19 @@
     function updateChangeCalc() {
       var totals = getTotals();
       var total = totals.total;
+      var method = String((el("payMethod") && el("payMethod").value) || "Efectivo");
       var rawVal = el("cashReceived").value;
       var hasCash = rawVal !== "" && isFinite(parseFloat(rawVal));
       var received = hasCash ? parseFloat(rawVal) : 0;
       var box = el("changeBox");
       box.classList.remove("due");
+
+      if (method !== "Efectivo" && method !== "Mixto") {
+        el("changeLabel").textContent = "COBRO POR " + method.toUpperCase();
+        el("changeHint").textContent = total > 0 ? "Monto registrado: " + fmtMoney(total) : "Sin cambio en efectivo";
+        el("changeVal").textContent = "$0.00";
+        return;
+      }
 
       if (!hasCash || received < total) {
         el("changeLabel").textContent = "CAMBIO / VUELTO A ENTREGAR";
@@ -2109,6 +2186,7 @@
       el("subVal").textContent = fmtMoney(totals.subtotal);
       el("ivaVal").textContent = fmtMoney(totals.iva);
       el("totalVal").textContent = fmtMoney(totals.total);
+      applyPaymentMethodUI();
       updateChangeCalc();
     }
 
@@ -2176,6 +2254,7 @@
         if (!silent) showToast("Usando catalogo local de prueba");
         return;
       }
+      flushPendingQueue();
       if (!silent) el("btnSync").textContent = "Sincronizando...";
       fetch(APPS_SCRIPT_URL + "?t=" + Date.now(), { cache: "no-store" })
         .then(function (res) { return res.json(); })
@@ -2355,7 +2434,9 @@
       var recibidoInput = parseFloat(el("cashReceived").value);
       var efectivoRecibido = isProforma
         ? total
-        : (isFinite(recibidoInput) ? recibidoInput : 0);
+        : (metodo !== "Efectivo" && metodo !== "Mixto"
+            ? (isFinite(recibidoInput) && recibidoInput > 0 ? recibidoInput : total)
+            : (isFinite(recibidoInput) ? recibidoInput : 0));
 
       if (!isProforma && metodo === "Efectivo" && efectivoRecibido <= 0) {
         playBeep(false);
@@ -2460,7 +2541,7 @@
         metodo_pago: metodo,
         billete_moneda: isProforma
           ? "No aplica (Proforma)"
-          : (selectedDenomLabel || (isFinite(recibidoInput) ? "Monto manual" : "No especificado")),
+          : (selectedDenomLabel || (isFinite(recibidoInput) ? "Monto manual" : metodo)),
         subtotal: Number(subtotal.toFixed(2)),
         iva: Number(iva.toFixed(2)),
         total: Number(total.toFixed(2)),
@@ -2530,7 +2611,8 @@
               headers: { "Content-Type": "text/plain;charset=utf-8" },
               body: JSON.stringify(payload)
             }).catch(function () {
-              showToast("Comprobante listo; reintento de red pendiente", true);
+              enqueuePendingPayload(payload);
+              showToast("Guardado en cola local; se enviará al reconectar", true);
             });
           });
       }
@@ -2854,7 +2936,10 @@
       }
       updateChangeCalc();
     };
-    el("payMethod").onchange = updateChangeCalc;
+    el("payMethod").onchange = function () {
+      applyPaymentMethodUI();
+      updateChangeCalc();
+    };
 
     el("btnClearCash").onclick = function () {
       playBeep(true);
