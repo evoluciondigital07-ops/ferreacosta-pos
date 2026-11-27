@@ -222,6 +222,19 @@
     .btn-info { background: var(--info); border-color: #0284c7; color: #041d2e; }
     .btn-danger { background: rgba(239, 68, 68, 0.16); border-color: var(--danger); color: #fca5a5; }
     .btn-sm { padding: 5px 8px; font-size: 0.72rem; line-height: 1.2; }
+    .btn-select-prod {
+      min-width: 56px;
+      padding: 8px 12px;
+      font-size: 0.8rem;
+      flex-shrink: 0;
+    }
+    @media (max-width: 640px) {
+      .btn-select-prod {
+        min-width: 64px;
+        padding: 10px 14px;
+        font-size: 0.84rem;
+      }
+    }
     .btn-locked {
       background: rgba(245, 158, 11, 0.2) !important;
       border-color: var(--warn) !important;
@@ -450,12 +463,11 @@
       border-radius: 9px;
       background: var(--panel-2);
       border: 1px solid var(--border);
-      cursor: pointer;
+      cursor: default;
       user-select: none;
     }
 
     .prod-item:hover { border-color: var(--accent); }
-    .prod-item:active { transform: scale(0.99); }
     .prod-item.out-stock {
       border-color: rgba(239, 68, 68, 0.55);
       opacity: 0.78;
@@ -1638,7 +1650,7 @@
         })
       };
 
-      if (applyStock) {
+    if (applyStock) {
         for (var i = 0; i < invItems.length; i++) {
           var cItem = invItems[i];
           if (cItem.estado !== "Sin_SKU") {
@@ -1790,7 +1802,10 @@
             '<div class="prod-name">' + p.nombre + "</div>" +
             '<div class="prod-meta">SKU: ' + p.sku + ' · <span class="stock-pill' + (isEmpty ? " low" : "") + '">' + stockText + "</span></div>" +
           "</div>" +
-          '<div class="prod-price mono-num">' + fmtMoney(unitFinal) + "</div>";
+          '<div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">' +
+            '<div class="prod-price mono-num">' + fmtMoney(unitFinal) + "</div>" +
+            '<button type="button" class="btn-green btn-select-prod" data-sku="' + String(p.sku || "") + '">OK</button>' +
+          "</div>";
         frag.appendChild(div);
         shown++;
       }
@@ -1800,9 +1815,9 @@
     }
 
     el("productList").addEventListener("click", function (e) {
-      var itemEl = e.target.closest(".prod-item");
-      if (!itemEl) return;
-      var sku = itemEl.getAttribute("data-sku");
+      var btnEl = e.target.closest(".btn-select-prod");
+      if (!btnEl) return;
+      var sku = btnEl.getAttribute("data-sku");
       var prod = findCatalogItemBySku(sku);
       if (!prod) return;
       if (mode === "INVENTARIO") {
