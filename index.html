@@ -474,38 +474,58 @@
     .stock-pill.low { color: #fca5a5; }
 
     .ticket-items {
-      max-height: 260px;
+      max-height: 220px;
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      gap: 8px;
-      margin-bottom: 12px;
+      gap: 5px;
+      margin-bottom: 10px;
     }
 
     .t-row {
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: nowrap;
       justify-content: space-between;
-      gap: 8px;
+      gap: 6px;
       align-items: center;
-      padding: 8px 10px;
-      border-radius: 8px;
+      padding: 6px 8px;
+      border-radius: 7px;
       background: var(--panel-2);
       border: 1px solid var(--border);
+    }
+
+    .t-row .prod-name {
+      font-size: 0.78rem;
+      line-height: 1.15;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .t-row .prod-meta {
+      font-size: 0.68rem;
+      margin-top: 1px;
     }
 
     .qty-box {
       display: flex;
       align-items: center;
-      gap: 4px;
+      gap: 3px;
+      flex-shrink: 0;
+    }
+
+    .qty-box .btn-sm {
+      padding: 4px 6px;
+      font-size: 0.72rem;
     }
 
     .qty-direct-input {
-      width: 58px;
+      width: 44px;
       text-align: center;
       font-weight: 700;
-      padding: 5px 4px;
-      font-size: 0.84rem;
+      padding: 4px 2px;
+      font-size: 0.78rem;
     }
 
     .inv-meta-grid {
@@ -1063,7 +1083,7 @@
   <div id="toast" class="toast"></div>
 
   <script>
-    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwIHsEMkVfI-dAglcSlxvUK3mKTNH1QAob1YeHIpynsW7ZgAUELerMcZumEum3eQ2zh/exec";
+    var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby1scvxsH-qs10jG04VE8PxkJky-iAuZqFFrmsKRZY-xxd4o2GWn4UDj6ZcH4meG1av/exec";
     var IVA_RATE = 0.15;
     var APLICAR_IVA_A_PRECIOS = false;
     var SCAN_COOLDOWN_MS = 2200;
@@ -1318,6 +1338,12 @@
       return catalogBySku[target] || null;
     }
 
+    function isProformaRedeemed(profObj) {
+      if (!profObj) return false;
+      var st = String(profObj.estado || "").trim().toLowerCase();
+      return profObj.canjeada === true || st === "canjeada" || st === "vendida" || st === "usada";
+    }
+
     function loadProformaIntoTicket(rawCode, clearInputOnMatch) {
       var normalized = String(rawCode || "").trim().toUpperCase();
       if (!normalized) return false;
@@ -1332,13 +1358,19 @@
         return false;
       }
 
-      if (proformaData.estado === "Canjeada" || proformaData.canjeada === true) {
+      if (isProformaRedeemed(proformaData)) {
+        proformaData.estado = "Canjeada";
+        proformaData.canjeada = true;
+        savedProformas[normalized] = proformaData;
+        persistProformas();
+        if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
         playBeep(false);
         showToast("La proforma " + normalized + " ya fue canjeada/vendida.", true);
         return true;
       }
 
       if (!Array.isArray(proformaData.items) || !proformaData.items.length) {
+        if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
         playBeep(false);
         showToast("La proforma " + normalized + " no tiene productos (0 und).", true);
         return true;
@@ -1364,7 +1396,7 @@
       var addedCount = 0;
       for (var i = 0; i < proformaData.items.length; i++) {
         var pItem = proformaData.items[i];
-        var qtyToAdd = Number(pItem.cant) || 0;
+        var qtyToAdd = Number(pItem.cant !== undefined ? pItem.cant : pItem.cantidad) || 0;
         if (qtyToAdd <= 0) continue;
 
         var catProd = findCatalogItemBySku(pItem.sku);
@@ -1376,10 +1408,9 @@
           stock: null
         };
 
-        var prevLen = ticket.length;
         var prevQty = 0;
         for (var t = 0; t < ticket.length; t++) {
-          if (ticket[t].sku === sourceProd.sku) {
+          if (String(ticket[t].sku || "").toLowerCase() === String(sourceProd.sku || "").toLowerCase()) {
             prevQty = ticket[t].cant;
             break;
           }
@@ -1387,13 +1418,13 @@
         addProductToTicket(sourceProd, qtyToAdd, false);
         var afterQty = 0;
         for (var t2 = 0; t2 < ticket.length; t2++) {
-          if (ticket[t2].sku === sourceProd.sku) {
+          if (String(ticket[t2].sku || "").toLowerCase() === String(sourceProd.sku || "").toLowerCase()) {
             afterQty = ticket[t2].cant;
             break;
           }
         }
-        if (afterQty > prevQty || ticket.length > prevLen) {
-          addedCount += Math.max(0, afterQty - prevQty);
+        if (afterQty > prevQty) {
+          addedCount += Number((afterQty - prevQty).toFixed(3));
         }
       }
 
@@ -1402,6 +1433,7 @@
         loadedProformaId = prevProformaId;
         renderTicket();
         setTimeout(function () { scanBusy = false; }, 500);
+        if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
         playBeep(false);
         showToast("La proforma " + normalized + " no tiene unidades válidas (0 und).", true);
         return true;
@@ -1409,7 +1441,7 @@
 
       playBeep(true);
       flashScannerHit("Proforma " + normalized);
-      if (clearInputOnMatch) el("scanInput").value = "";
+      if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
       showToast("Proforma " + normalized + " cargada (" + addedCount + " und)");
       setTimeout(function () { scanBusy = false; }, 600);
       return true;
@@ -1771,7 +1803,7 @@
 
       var existing = null;
       for (var i = 0; i < ticket.length; i++) {
-        if (ticket[i].sku === prod.sku) {
+        if (String(ticket[i].sku || "").toLowerCase() === String(prod.sku || "").toLowerCase()) {
           existing = ticket[i];
           break;
         }
@@ -1808,6 +1840,13 @@
       renderTicket();
     }
 
+    function extractProformaCode(rawStr) {
+      var str = String(rawStr || "").trim().toUpperCase();
+      if (!str) return "";
+      var match = str.match(/\bP-\d{3,}\b/);
+      return match ? match[0] : str;
+    }
+
     function handleCodeLookup(rawCode, opts) {
       var options = opts || {};
       var silentNotFound = !!options.silentNotFound;
@@ -1815,51 +1854,68 @@
       var code = String(rawCode || "").trim();
       if (!code || scanBusy || isGeneratingSale) return false;
 
-      if (mode !== "INVENTARIO" && loadProformaIntoTicket(code, clearInputOnMatch)) {
-        return true;
-      }
+      var normalizedProf = extractProformaCode(code);
+      if (mode !== "INVENTARIO" && normalizedProf.indexOf("P-") === 0) {
+        if (loadProformaIntoTicket(normalizedProf, clearInputOnMatch)) {
+          return true;
+        }
 
-      if (mode !== "INVENTARIO" && code.toUpperCase().indexOf("P-") === 0) {
-        var upperCode = code.toUpperCase();
-        var cachedProf = savedProformas[upperCode];
-        if (cachedProf && (cachedProf.estado === "Canjeada" || cachedProf.canjeada === true)) {
+        var cachedProf = savedProformas[normalizedProf];
+        if (cachedProf && isProformaRedeemed(cachedProf)) {
+          if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
           playBeep(false);
-          showToast("La proforma " + upperCode + " ya fue canjeada/vendida.", true);
+          showToast("La proforma " + normalizedProf + " ya fue canjeada/vendida.", true);
           return true;
         }
 
         if (typeof APPS_SCRIPT_URL === "string" && APPS_SCRIPT_URL && APPS_SCRIPT_URL.indexOf("REEMPLAZA_CON_TU_URL") === -1) {
           scanBusy = true;
           if (!silentNotFound) {
-            showToast("Buscando proforma en la nube: " + upperCode + "...", false);
+            showToast("Buscando proforma en la nube: " + normalizedProf + "...", false);
           }
-          fetch(APPS_SCRIPT_URL + "?action=get_proforma&id=" + encodeURIComponent(upperCode))
+          fetch(APPS_SCRIPT_URL + "?action=get_proforma&id=" + encodeURIComponent(normalizedProf) + "&t=" + Date.now(), { cache: "no-store" })
             .then(function (res) { return res.json(); })
             .then(function (data) {
               scanBusy = false;
               if (data && data.ok && data.proforma) {
-                var validItems = Array.isArray(data.proforma.items)
-                  ? data.proforma.items.filter(function (it) { return (Number(it.cant) || 0) > 0; })
-                  : [];
-                if (!validItems.length) {
+                var pObj = data.proforma;
+                if (isProformaRedeemed(pObj)) {
+                  pObj.estado = "Canjeada";
+                  pObj.canjeada = true;
+                  savedProformas[normalizedProf] = pObj;
+                  persistProformas();
+                  if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
                   playBeep(false);
-                  showToast("La proforma " + upperCode + " no tiene unidades válidas (0 und).", true);
+                  showToast("La proforma " + normalizedProf + " ya fue canjeada/vendida.", true);
                   return;
                 }
-                data.proforma.items = validItems;
-                savedProformas[upperCode] = data.proforma;
+                var rawItems = Array.isArray(pObj.items) ? pObj.items : [];
+                var validItems = rawItems.filter(function (it) {
+                  var q = Number(it.cant !== undefined ? it.cant : it.cantidad) || 0;
+                  return q > 0;
+                });
+                if (!validItems.length) {
+                  if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
+                  playBeep(false);
+                  showToast("La proforma " + normalizedProf + " no tiene unidades válidas (0 und).", true);
+                  return;
+                }
+                pObj.items = validItems;
+                pObj.estado = "Activa";
+                pObj.canjeada = false;
+                savedProformas[normalizedProf] = pObj;
                 persistProformas();
-                loadProformaIntoTicket(upperCode, clearInputOnMatch);
+                loadProformaIntoTicket(normalizedProf, clearInputOnMatch);
               } else if (!silentNotFound) {
                 playBeep(false);
-                showToast("Proforma no encontrada: " + upperCode, true);
+                showToast("Proforma no encontrada: " + normalizedProf, true);
               }
             })
             .catch(function () {
               scanBusy = false;
               if (!silentNotFound) {
                 playBeep(false);
-                showToast("Proforma no encontrada en este equipo: " + upperCode, true);
+                showToast("Proforma no encontrada en este equipo: " + normalizedProf, true);
               }
             });
           return true;
@@ -1867,7 +1923,7 @@
 
         if (!silentNotFound) {
           playBeep(false);
-          showToast("Proforma no encontrada en este equipo: " + upperCode, true);
+          showToast("Proforma no encontrada en este equipo: " + normalizedProf, true);
         }
         return false;
       }
@@ -1898,7 +1954,7 @@
           addProductToTicket(match, 1, true);
         }
         flashScannerHit(match.nombre);
-        if (clearInputOnMatch) el("scanInput").value = "";
+        if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
         setTimeout(function () { scanBusy = false; }, 500);
         return true;
       }
@@ -1909,7 +1965,7 @@
         lastScanTime = now;
         addProductToInventoryCount(code.toUpperCase(), 1);
         flashScannerHit("Sin_SKU: " + code.toUpperCase());
-        if (clearInputOnMatch) el("scanInput").value = "";
+        if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
         setTimeout(function () { scanBusy = false; }, 500);
         return true;
       }
@@ -1985,7 +2041,7 @@
       var wrap = el("ticketItems");
       wrap.innerHTML = "";
       if (!ticket.length) {
-        wrap.innerHTML = '<div class="prod-meta" style="text-align:center; padding:18px;">Escanea o selecciona productos para iniciar el ticket</div>';
+        wrap.innerHTML = '<div class="prod-meta" style="text-align:center; padding:14px;">Escanea o selecciona productos para iniciar el ticket</div>';
       } else {
         var frag = document.createDocumentFragment();
         ticket.forEach(function (item, idx) {
@@ -1993,13 +2049,13 @@
           var sub = Number((item.cant * uPrice).toFixed(2));
           var stk = getStockQty(item);
           var unitDisp = formatUnitLabel(item.unidad);
-          var stkNote = stk !== null ? " - Stock: " + stk : "";
+          var stkNote = stk !== null ? " · Stock: " + stk : "";
           var row = document.createElement("div");
           row.className = "t-row";
           row.innerHTML =
             '<div style="min-width:0; flex:1;">' +
               '<div class="prod-name">' + item.nombre + "</div>" +
-              '<div class="prod-meta">' + item.sku + " - " + fmtMoney(uPrice) + " / " + unitDisp + stkNote + "</div>" +
+              '<div class="prod-meta">' + item.sku + " · " + fmtMoney(uPrice) + "/" + unitDisp + stkNote + "</div>" +
             "</div>" +
             '<div class="qty-box">' +
               '<button type="button" class="btn-sm" onclick="changeQty(' + idx + ', -1)">-</button>' +
@@ -2007,8 +2063,8 @@
               '<button type="button" class="btn-sm" onclick="changeQty(' + idx + ', 1)">+</button>' +
               '<button type="button" class="btn-sm btn-info" onclick="confirmTicketRow(' + idx + ')">OK</button>' +
             "</div>" +
-            '<div style="text-align:right;">' +
-              '<div class="mono-num" style="font-weight:700;">' + fmtMoney(sub) + "</div>" +
+            '<div style="text-align:right; flex-shrink:0;">' +
+              '<div class="mono-num" style="font-weight:700; font-size:0.84rem;">' + fmtMoney(sub) + "</div>" +
               '<button type="button" class="btn-danger btn-sm" onclick="removeItem(' + idx + ')">X</button>' +
             "</div>";
           frag.appendChild(row);
@@ -2225,8 +2281,7 @@
         return;
       }
 
-      if (!isProforma && loadedProformaId && savedProformas[loadedProformaId] &&
-          (savedProformas[loadedProformaId].estado === "Canjeada" || savedProformas[loadedProformaId].canjeada === true)) {
+      if (!isProforma && loadedProformaId && isProformaRedeemed(savedProformas[loadedProformaId])) {
         playBeep(false);
         showToast("La proforma " + loadedProformaId + " ya fue canjeada anteriormente.", true);
         return;
@@ -2322,6 +2377,7 @@
         items: mappedItems
       };
 
+      var profCanjeadaId = "";
       if (isProforma) {
         savedProformas[idDoc] = {
           idProforma: idDoc,
@@ -2335,13 +2391,14 @@
         };
         persistProformas();
       } else if (loadedProformaId) {
-        if (!savedProformas[loadedProformaId]) {
-          savedProformas[loadedProformaId] = { idProforma: loadedProformaId, items: mappedItems };
+        profCanjeadaId = String(loadedProformaId).trim().toUpperCase();
+        if (!savedProformas[profCanjeadaId]) {
+          savedProformas[profCanjeadaId] = { idProforma: profCanjeadaId, items: mappedItems };
         }
-        savedProformas[loadedProformaId].estado = "Canjeada";
-        savedProformas[loadedProformaId].canjeada = true;
-        savedProformas[loadedProformaId].canjeadaEn = saleDate.toISOString();
-        savedProformas[loadedProformaId].ventaId = idDoc;
+        savedProformas[profCanjeadaId].estado = "Canjeada";
+        savedProformas[profCanjeadaId].canjeada = true;
+        savedProformas[profCanjeadaId].canjeadaEn = saleDate.toISOString();
+        savedProformas[profCanjeadaId].ventaId = idDoc;
         persistProformas();
       }
 
@@ -2361,6 +2418,8 @@
         total: Number(total.toFixed(2)),
         efectivo_recibido: Number(efectivoRecibido.toFixed(2)),
         cambio: Number(cambio.toFixed(2)),
+        id_proforma_canjeada: profCanjeadaId,
+        estado_proforma: profCanjeadaId ? "Canjeada" : "",
         items: mappedItems.map(function (i) {
           return {
             sku: i.sku,
@@ -2425,7 +2484,9 @@
                     ) {
                       return;
                     }
-                    handleCodeLookup(scannedCode, { silentNotFound: false, clearInputOnMatch: false });
+                    clearTimeout(autoScanTimer);
+                    if (el("scanInput")) el("scanInput").value = "";
+                    handleCodeLookup(scannedCode, { silentNotFound: false, clearInputOnMatch: true });
                   }
                 }).catch(function () {});
                 scanLoopId = requestAnimationFrame(tick);
@@ -2452,7 +2513,9 @@
             ) {
               return;
             }
-            handleCodeLookup(zCode, { silentNotFound: false, clearInputOnMatch: false });
+            clearTimeout(autoScanTimer);
+            if (el("scanInput")) el("scanInput").value = "";
+            handleCodeLookup(zCode, { silentNotFound: false, clearInputOnMatch: true });
           }
         }).catch(function () {
           el("scannerStatus").textContent = "No se pudo iniciar la cámara.";
