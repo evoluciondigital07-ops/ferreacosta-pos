@@ -1208,6 +1208,38 @@
       return document.getElementById(id);
     }
 
+    function focusScanInput() {
+      var scanEl = el("scanInput");
+      if (!scanEl) return;
+      var active = document.activeElement;
+      if (
+        active &&
+        active !== scanEl &&
+        (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT") &&
+        active.id !== "scanInput"
+      ) {
+        return;
+      }
+      setTimeout(function () {
+        var vModal = el("vendorModal");
+        if (vModal && vModal.classList.contains("open")) return;
+        var currentActive = document.activeElement;
+        if (
+          currentActive &&
+          currentActive !== scanEl &&
+          (currentActive.tagName === "INPUT" || currentActive.tagName === "TEXTAREA" || currentActive.tagName === "SELECT") &&
+          currentActive.id !== "scanInput"
+        ) {
+          return;
+        }
+        try {
+          scanEl.focus({ preventScroll: true });
+        } catch (_) {
+          scanEl.focus();
+        }
+      }, 45);
+    }
+
     function persistPendingQueue() {
       try {
         localStorage.setItem("fa_pending_queue", JSON.stringify(pendingQueue));
@@ -1317,6 +1349,7 @@
     function warnOutOfStock(msg) {
       playBeep(false);
       showToast(msg, true);
+      focusScanInput();
     }
 
     function getStockQty(prod) {
@@ -1488,6 +1521,7 @@
       } else {
         renderInventoryCount();
       }
+      focusScanInput();
     }
 
     function persistProformas() {
@@ -1530,6 +1564,7 @@
         if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
         playBeep(false);
         showToast("La proforma " + normalized + " ya fue canjeada/vendida.", true);
+        focusScanInput();
         return true;
       }
 
@@ -1537,6 +1572,7 @@
         if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
         playBeep(false);
         showToast("La proforma " + normalized + " no tiene productos (0 und).", true);
+        focusScanInput();
         return true;
       }
 
@@ -1600,6 +1636,7 @@
         if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
         playBeep(false);
         showToast("La proforma " + normalized + " no tiene unidades válidas (0 und).", true);
+        focusScanInput();
         return true;
       }
 
@@ -1607,6 +1644,7 @@
       flashScannerHit("Proforma " + normalized);
       if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
       showToast("Proforma " + normalized + " cargada (" + addedCount + " und)");
+      focusScanInput();
       setTimeout(function () { scanBusy = false; }, 600);
       return true;
     }
@@ -1638,6 +1676,7 @@
         playBeep(false);
         renderInventoryCount();
         showToast("Código no registrado: " + codeStr, true);
+        focusScanInput();
         return;
       }
 
@@ -1654,7 +1693,7 @@
         }
       }
 
-      if (existing) {
+    if (existing) {
         existing.stock_fisico = Number((existing.stock_fisico + amount).toFixed(2));
         existing.stock_sistema = sysStock;
         existing.unidad = unitDisp;
@@ -1671,6 +1710,7 @@
 
       playBeep(true);
       renderInventoryCount();
+      focusScanInput();
     }
 
     function renderInventoryCount() {
@@ -1733,6 +1773,7 @@
       if (!invItems[idx]) return;
       invItems[idx].stock_fisico = Math.max(0, Number(((Number(invItems[idx].stock_fisico) || 0) + delta).toFixed(2)));
       renderInventoryCount();
+      focusScanInput();
     };
 
     window.setInvItemQty = function (idx, rawVal) {
@@ -1740,17 +1781,20 @@
       var n = parseFloat(rawVal);
       invItems[idx].stock_fisico = isFinite(n) && n >= 0 ? Number(n.toFixed(2)) : 0;
       renderInventoryCount();
+      focusScanInput();
     };
 
     window.removeInvItem = function (idx) {
       invItems.splice(idx, 1);
       renderInventoryCount();
+      focusScanInput();
     };
 
     function saveInventoryCount(applyStock) {
       if (isSavingInventory) return;
       if (!invItems.length) {
         showToast("Agrega al menos un producto al conteo", true);
+        focusScanInput();
         return;
       }
 
@@ -1811,6 +1855,7 @@
       el("invCodeInput").value = "";
       updateDocNumberBadge();
       renderInventoryCount();
+      focusScanInput();
 
       setTimeout(function () {
         isSavingInventory = false;
@@ -1964,6 +2009,7 @@
       } else {
         addProductToTicket(prod, 1, true);
       }
+      focusScanInput();
     });
 
     function addProductToTicket(prod, qty, withSound) {
@@ -2043,6 +2089,7 @@
           if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
           playBeep(false);
           showToast("La proforma " + normalizedProf + " ya fue canjeada/vendida.", true);
+          focusScanInput();
           return true;
         }
 
@@ -2065,6 +2112,7 @@
                   if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
                   playBeep(false);
                   showToast("La proforma " + normalizedProf + " ya fue canjeada/vendida.", true);
+                  focusScanInput();
                   return;
                 }
                 var rawItems = Array.isArray(pObj.items) ? pObj.items : [];
@@ -2076,6 +2124,7 @@
                   if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
                   playBeep(false);
                   showToast("La proforma " + normalizedProf + " no tiene unidades válidas (0 und).", true);
+                  focusScanInput();
                   return;
                 }
                 pObj.items = validItems;
@@ -2087,6 +2136,7 @@
               } else if (!silentNotFound) {
                 playBeep(false);
                 showToast("Proforma no encontrada: " + normalizedProf, true);
+                focusScanInput();
               }
             })
             .catch(function () {
@@ -2094,6 +2144,7 @@
               if (!silentNotFound) {
                 playBeep(false);
                 showToast("Proforma no encontrada en este equipo: " + normalizedProf, true);
+                focusScanInput();
               }
             });
           return true;
@@ -2102,6 +2153,7 @@
         if (!silentNotFound) {
           playBeep(false);
           showToast("Proforma no encontrada en este equipo: " + normalizedProf, true);
+          focusScanInput();
         }
         return false;
       }
@@ -2139,6 +2191,7 @@
         }
         flashScannerHit(match.nombre);
         if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
+        focusScanInput();
         setTimeout(function () { scanBusy = false; }, 500);
         return true;
       }
@@ -2150,6 +2203,7 @@
         addProductToInventoryCount(code.toUpperCase(), 1);
         flashScannerHit("Sin_SKU: " + code.toUpperCase());
         if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
+        focusScanInput();
         setTimeout(function () { scanBusy = false; }, 500);
         return true;
       }
@@ -2158,6 +2212,7 @@
         if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
         playBeep(false);
         showToast("Codigo no encontrado: " + code, true);
+        focusScanInput();
       }
       return false;
     }
@@ -2225,6 +2280,7 @@
       isGeneratingSale = false;
       el("btnGenerateSale").disabled = false;
       el("btnGenerateSale").textContent = mode === "PROFORMA" ? "Generar Proforma" : "Generar Venta";
+      focusScanInput();
     }
 
     function renderTicket() {
@@ -2277,6 +2333,7 @@
       if (!isFinite(n) || n <= 0) {
         ticket.splice(idx, 1);
         renderTicket();
+        focusScanInput();
         return;
       }
       var stk = getStockQty(item);
@@ -2288,6 +2345,7 @@
       }
       item.cant = Number(n.toFixed(3));
       renderTicket();
+      focusScanInput();
     };
 
     window.confirmTicketRow = function (idx) {
@@ -2295,6 +2353,7 @@
       playBeep(true);
       renderTicket();
       showToast("Cantidad confirmada: " + ticket[idx].nombre);
+      focusScanInput();
     };
 
     window.changeQty = function (idx, delta) {
@@ -2317,11 +2376,13 @@
       item.cant = Number((item.cant + delta).toFixed(3));
       if (item.cant <= 0) ticket.splice(idx, 1);
       renderTicket();
+      focusScanInput();
     };
 
     window.removeItem = function (idx) {
       ticket.splice(idx, 1);
       renderTicket();
+      focusScanInput();
     };
 
     function syncCatalog(silent) {
@@ -2485,12 +2546,14 @@
       if (!validTicketItems.length || total <= 0) {
         playBeep(false);
         showToast(isProforma ? "Agrega productos con cantidad mayor a 0 para la proforma" : "No se puede generar una venta en $0.00 o sin productos", true);
+        focusScanInput();
         return;
       }
 
       if (!isProforma && loadedProformaId && isProformaRedeemed(savedProformas[loadedProformaId])) {
         playBeep(false);
         showToast("La proforma " + loadedProformaId + " ya fue canjeada anteriormente.", true);
+        focusScanInput();
         return;
       }
 
@@ -2542,6 +2605,7 @@
       var nowMs = saleDate.getTime();
       if (signature === lastSaleSignature && nowMs - lastSaleTimestamp < 3000) {
         showToast("Operación ya generada hace un momento; evita repetirla", true);
+        focusScanInput();
         return;
       }
 
@@ -2825,6 +2889,7 @@
         zxingReader = null;
       }
       el("scannerBox").style.display = "none";
+      focusScanInput();
     }
 
     function isInFullscreen() {
@@ -2882,6 +2947,7 @@
         updateLockButtonUI();
         showToast("Candado desbloqueado");
       }
+      focusScanInput();
     }
 
     document.addEventListener("fullscreenchange", function () {
@@ -2909,7 +2975,10 @@
       el("vendorModal").classList.add("open");
       el("newVendorName").focus();
     };
-    el("btnCloseVendorModal").onclick = function () { el("vendorModal").classList.remove("open"); };
+    el("btnCloseVendorModal").onclick = function () {
+      el("vendorModal").classList.remove("open");
+      focusScanInput();
+    };
     el("btnAddVendor").onclick = addVendor;
     el("newVendorName").addEventListener("keydown", function (e) {
       if (e.key === "Enter") {
@@ -2966,11 +3035,12 @@
             clearInputOnMatch: true
           });
         }
-      }, 180);
+      }, 100);
     });
 
     el("btnAddScan").onclick = function () {
       handleCodeLookup(el("scanInput").value, { silentNotFound: false, clearInputOnMatch: true });
+      focusScanInput();
     };
     el("scanInput").addEventListener("keydown", function (e) {
       if (e.key === "Enter") {
@@ -2989,6 +3059,7 @@
         addProductToTicket(sample, 1, true);
       }
       showToast("Simulado: " + sample.nombre);
+      focusScanInput();
     };
     el("btnCamera").onclick = startCameraScanner;
     el("btnStopCam").onclick = stopCameraScanner;
@@ -3002,10 +3073,12 @@
       loadedProformaId = "";
       resetPaymentSelection();
       renderTicket();
+      focusScanInput();
     };
     el("btnClearInv").onclick = function () {
       invItems = [];
       renderInventoryCount();
+      focusScanInput();
     };
     el("btnSaveInvOnly").onclick = function () { saveInventoryCount(false); };
     el("btnApplyInvStock").onclick = function () { saveInventoryCount(true); };
@@ -3044,6 +3117,7 @@
 
       if (!dataToPrint || !dataToPrint.items || !dataToPrint.items.length) {
         showToast("Genera una venta o proforma o agrega productos para imprimir", true);
+        focusScanInput();
         return;
       }
 
@@ -3094,6 +3168,7 @@
     el("btnClearCash").onclick = function () {
       playBeep(true);
       resetPaymentSelection();
+      focusScanInput();
     };
 
     document.querySelectorAll(".bill-btn").forEach(function (btn) {
@@ -3145,6 +3220,7 @@
     renderCatalog();
     applyModeUI();
     syncCatalog(true);
+    focusScanInput();
   </script>
 </body>
 </html>
