@@ -417,17 +417,17 @@
       align-items: center;
       justify-content: center;
       gap: 8px;
-      background: radial-gradient(circle at center, transparent 38%, rgba(2, 6, 23, 0.65) 100%);
+      background: radial-gradient(circle at center, transparent 52%, rgba(2, 6, 23, 0.22) 100%);
     }
 
     .reticle {
       position: relative;
-      width: 78%;
-      max-width: 320px;
-      height: 132px;
+      width: 84%;
+      max-width: 340px;
+      height: 136px;
       border-radius: 12px;
-      border: 1px solid rgba(148, 163, 184, 0.25);
-      box-shadow: 0 0 0 999px rgba(2, 6, 23, 0.26), inset 0 0 18px rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      box-shadow: inset 0 0 12px rgba(56, 189, 248, 0.08);
     }
 
     .reticle::before, .reticle::after,
@@ -473,8 +473,8 @@
     }
 
     .scanner-stage.scan-hit .reticle {
-      border-color: rgba(16, 185, 129, 0.55);
-      box-shadow: 0 0 0 999px rgba(2, 6, 23, 0.26), inset 0 0 24px rgba(16, 185, 129, 0.25);
+      border-color: rgba(16, 185, 129, 0.65);
+      box-shadow: inset 0 0 20px rgba(16, 185, 129, 0.22);
     }
 
     .scanner-stage.scan-hit .reticle::before,
@@ -1161,7 +1161,7 @@
     var APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxcyJRAKSFEbCJ57gjTAoa6YX7fCyai3ltfcqe5PyIEinQwjiC_z9sXDmB9K-MUg1hd/exec";
     var IVA_RATE = 0.15;
     var APLICAR_IVA_A_PRECIOS = false;
-    var SCAN_COOLDOWN_MS = 2200;
+    var SCAN_COOLDOWN_MS = 3200;
 
     var DEFAULT_VENDORS = ["Vendedor 1", "Vendedor 2", "Vendedor 3"];
     var SAMPLE_CATALOG = [
@@ -1188,6 +1188,8 @@
     var lastScanTime = 0;
     var scanBusy = false;
     var camDetectBusy = false;
+    var lastRawCandidate = "";
+    var rawCandidateHits = 0;
     var autoScanTimer = null;
     var filterDebounceTimer = null;
     var selectedDenomLabel = "";
@@ -2137,8 +2139,6 @@
       }
 
       if (!silentNotFound) {
-        lastScanCode = normCode;
-        lastScanTime = now;
         playBeep(false);
         showToast("Codigo no encontrado: " + code, true);
       }
@@ -2686,6 +2686,8 @@
       el("scannerBox").style.display = "block";
       el("scannerStatus").textContent = "Iniciando cámara láser...";
       camDetectBusy = false;
+      lastRawCandidate = "";
+      rawCandidateHits = 0;
 
       var videoConstraints = {
         facingMode: { ideal: "environment" },
@@ -2736,6 +2738,20 @@
                       return;
                     }
 
+                    var isProformaQr = /\bP-\d{3,}\b/i.test(rawVal);
+                    if (!isProformaQr) {
+                      if (rawVal === lastRawCandidate) {
+                        rawCandidateHits += 1;
+                      } else {
+                        lastRawCandidate = rawVal;
+                        rawCandidateHits = 1;
+                        return;
+                      }
+                      if (rawCandidateHits < 2) return;
+                    }
+                    lastRawCandidate = "";
+                    rawCandidateHits = 0;
+
                     clearTimeout(autoScanTimer);
                     if (el("scanInput")) el("scanInput").value = "";
                     handleCodeLookup(rawVal, { silentNotFound: false, clearInputOnMatch: true });
@@ -2768,6 +2784,21 @@
             ) {
               return;
             }
+
+            var isProformaQrZ = /\bP-\d{3,}\b/i.test(zCode);
+            if (!isProformaQrZ) {
+              if (zCode === lastRawCandidate) {
+                rawCandidateHits += 1;
+              } else {
+                lastRawCandidate = zCode;
+                rawCandidateHits = 1;
+                return;
+              }
+              if (rawCandidateHits < 2) return;
+            }
+            lastRawCandidate = "";
+            rawCandidateHits = 0;
+
             clearTimeout(autoScanTimer);
             if (el("scanInput")) el("scanInput").value = "";
             handleCodeLookup(zCode, { silentNotFound: false, clearInputOnMatch: true });
@@ -2781,6 +2812,8 @@
     }
 
     function stopCameraScanner() {
+      lastRawCandidate = "";
+      rawCandidateHits = 0;
       camDetectBusy = false;
       if (scanLoopId) cancelAnimationFrame(scanLoopId);
       scanLoopId = null;
