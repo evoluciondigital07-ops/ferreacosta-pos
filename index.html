@@ -2027,6 +2027,11 @@
       var code = String(rawCode || "").trim();
       if (!code || scanBusy || isGeneratingSale) return false;
 
+      var onlyDigits = code.replace(/\D+/g, "");
+      if (code === onlyDigits && onlyDigits.length > 13) {
+        code = onlyDigits.slice(-13);
+      }
+
       var normalizedProf = extractProformaCode(code);
       if (mode !== "INVENTARIO" && normalizedProf.indexOf("P-") === 0) {
         if (loadProformaIntoTicket(normalizedProf, clearInputOnMatch)) {
@@ -2107,8 +2112,14 @@
         return false;
       }
 
+      var isNumericBarcode = /^[0-9]{6,14}$/.test(code);
       var match = catalogBySku[normCode] || null;
-      if (!match && !silentNotFound) {
+
+      if (!match && isNumericBarcode && normCode.length === 12) {
+        match = catalogBySku["6" + normCode] || catalogBySku["0" + normCode] || null;
+      }
+
+      if (!match && !silentNotFound && !isNumericBarcode) {
         for (var j = 0; j < catalog.length; j++) {
           if (String(catalog[j].nombre).toLowerCase().indexOf(normCode) !== -1) {
             match = catalog[j];
@@ -2144,6 +2155,7 @@
       }
 
       if (!silentNotFound) {
+        if (clearInputOnMatch && el("scanInput")) el("scanInput").value = "";
         playBeep(false);
         showToast("Codigo no encontrado: " + code, true);
       }
@@ -2781,11 +2793,12 @@
           });
       } else if (window.ZXing) {
         zxingReader = new ZXing.BrowserMultiFormatReader(null, 400);
-        el("scannerStatus").textContent = "Escáner activo con ZXing...";
+        el("scannerStatus").textContent = "Escáner activo con ZXing (QR y barras)...";
         zxingReader.decodeFromVideoDevice(null, "scannerVideo", function (result) {
           if (result && result.getText()) {
             var zCode = String(result.getText() || "").replace(/[\r\n]+/g, " ").trim();
-            var zFmt = result.getBarcodeFormat === ZXing.BarcodeFormat.QR_CODE ? "qr_code" : "";
+            var fmtObj = typeof result.getBarcodeFormat === "function" ? result.getBarcodeFormat() : null;
+            var zFmt = fmtObj === ZXing.BarcodeFormat.QR_CODE ? "qr_code" : "";
             if (shouldSkipDuplicate(zCode)) return;
             acceptDetectedCode(zCode, zFmt);
           }
@@ -2924,11 +2937,35 @@
 
     el("scanInput").addEventListener("input", function () {
       clearTimeout(autoScanTimer);
-      var val = el("scanInput").value.trim();
-      if (!val) return;
-      if (handleCodeLookup(val, { silentNotFound: true, clearInputOnMatch: true })) return;
+      var raw = el("scanInput").value.trim();
+      if (!raw) return;
+
+      if (/^P-\d{3,}$/i.test(raw)) {
+        handleCodeLookup(raw, { silentNotFound: true, clearInputOnMatch: true });
+        return;
+      }
+
+      var digitsOnly = raw.replace(/\D+/g, "");
+      if (digitsOnly.length === 13 && raw === digitsOnly) {
+        handleCodeLookup(digitsOnly, { silentNotFound: true, clearInputOnMatch: true });
+        return;
+      }
+
+      if (digitsOnly.length > 13) {
+        var last13 = digitsOnly.slice(-13);
+        handleCodeLookup(last13, { silentNotFound: true, clearInputOnMatch: true });
+        return;
+      }
+
       autoScanTimer = setTimeout(function () {
-        handleCodeLookup(el("scanInput").value, { silentNotFound: true, clearInputOnMatch: true });
+        var latest = el("scanInput").value.trim();
+        var latestDigits = latest.replace(/\D+/g, "");
+        if (latestDigits.length >= 12) {
+          handleCodeLookup(latestDigits.length > 13 ? latestDigits.slice(-13) : latestDigits, {
+            silentNotFound: true,
+            clearInputOnMatch: true
+          });
+        }
       }, 180);
     });
 
@@ -2938,6 +2975,7 @@
     el("scanInput").addEventListener("keydown", function (e) {
       if (e.key === "Enter") {
         e.preventDefault();
+        clearTimeout(autoScanTimer);
         handleCodeLookup(el("scanInput").value, { silentNotFound: false, clearInputOnMatch: true });
       }
     });
