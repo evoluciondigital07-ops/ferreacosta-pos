@@ -2769,8 +2769,20 @@
             el("scannerStatus").textContent = "Permiso de cámara denegado o no disponible.";
           });
       } else if (window.ZXing) {
-        zxingReader = new ZXing.BrowserMultiFormatReader();
-        el("scannerStatus").textContent = "Escáner láser activo con ZXing...";
+        var hints = new Map();
+        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+          ZXing.BarcodeFormat.QR_CODE,
+          ZXing.BarcodeFormat.EAN_13,
+          ZXing.BarcodeFormat.EAN_8,
+          ZXing.BarcodeFormat.CODE_128,
+          ZXing.BarcodeFormat.CODE_39,
+          ZXing.BarcodeFormat.UPC_A,
+          ZXing.BarcodeFormat.UPC_E,
+          ZXing.BarcodeFormat.ITF
+        ]);
+        zxingReader = new ZXing.BrowserMultiFormatReader(hints, 250);
+        el("scannerStatus").textContent = "Escáner láser activo con ZXing (Alta precisión)...";
         zxingReader.decodeFromVideoDevice(null, "scannerVideo", function (result) {
           if (result && result.getText()) {
             var zCode = String(result.getText() || "").replace(/[\r\n]+/g, " ").trim();
