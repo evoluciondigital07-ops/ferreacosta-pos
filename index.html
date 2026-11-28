@@ -3,9 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-  <meta http-equiv="Pragma" content="no-cache" />
-  <meta http-equiv="Expires" content="0" />
   <title>FERREACOSTA POS - Caja Supermercado</title>
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
@@ -1168,10 +1165,10 @@
 
     var DEFAULT_VENDORS = ["Vendedor 1", "Vendedor 2", "Vendedor 3"];
     var SAMPLE_CATALOG = [
-      { sku: "FER-001", nombre: "Disco de corte metal 4-1/2"", precio: 1.50, unidad: "und", stock: 25 },
+      { sku: "FER-001", nombre: "Disco de corte metal 4-1/2\"", precio: 1.50, unidad: "und", stock: 25 },
       { sku: "FER-002", nombre: "Cable flexible #14 AWG negro", precio: 0.65, unidad: "m", stock: 120 },
-      { sku: "FER-003", nombre: "Cinta aislante negra 3/4"", precio: 1.10, unidad: "und", stock: 0 },
-      { sku: "FER-004", nombre: "Tornillo drywall 6x1" caja x100", precio: 2.80, unidad: "cja", stock: 14 },
+      { sku: "FER-003", nombre: "Cinta aislante negra 3/4\"", precio: 1.10, unidad: "und", stock: 0 },
+      { sku: "FER-004", nombre: "Tornillo drywall 6x1\" caja x100", precio: 2.80, unidad: "cja", stock: 14 },
       { sku: "FER-005", nombre: "Silicona transparente 42.5ml", precio: 1.50, unidad: "und", stock: 8 },
       { sku: "FER-006", nombre: "Interruptor sencillo 3V blanco", precio: 2.75, unidad: "und", stock: 6 }
     ];
@@ -1200,7 +1197,6 @@
     var lastReceiptInfo = null;
     var isScreenLocked = false;
     var sharedAudioCtx = null;
-    var autoSyncIntervalId = null;
 
     var isGeneratingSale = false;
     var isSavingInventory = false;
@@ -1212,14 +1208,7 @@
       return document.getElementById(id);
     }
 
-    function isCameraActive() {
-      var box = el("scannerBox");
-      var boxOpen = Boolean(box && box.style.display === "block");
-      return Boolean(boxOpen || streamRef || scanLoopId);
-    }
-
     function focusScanInput() {
-      if (isCameraActive()) return;
       var scanEl = el("scanInput");
       if (!scanEl) return;
       var active = document.activeElement;
@@ -1232,7 +1221,6 @@
         return;
       }
       setTimeout(function () {
-        if (isCameraActive()) return;
         var vModal = el("vendorModal");
         if (vModal && vModal.classList.contains("open")) return;
         var currentActive = document.activeElement;
@@ -1705,7 +1693,7 @@
         }
       }
 
-      if (existing) {
+    if (existing) {
         existing.stock_fisico = Number((existing.stock_fisico + amount).toFixed(2));
         existing.stock_sistema = sysStock;
         existing.unidad = unitDisp;
@@ -2074,7 +2062,7 @@
     function extractProformaCode(rawStr) {
       var str = String(rawStr || "").trim().toUpperCase();
       if (!str) return "";
-      var match = str.match(/P-\d{3,}/);
+      var match = str.match(/\bP-\d{3,}\b/);
       return match ? match[0] : str;
     }
 
@@ -2525,7 +2513,7 @@
         "</div>" +
         '<div class="rcpt-divider"></div>' +
         '<table class="rcpt-table">' +
-          "<thead><tr><th>CANT</th><th>DESCRIPCIÓN</th><th class="rcpt-right">SUBT.</th></tr></thead>" +
+          "<thead><tr><th>CANT</th><th>DESCRIPCIÓN</th><th class=\"rcpt-right\">SUBT.</th></tr></thead>" +
           "<tbody>" + rowsHtml + "</tbody>" +
         "</table>" +
         '<div class="rcpt-divider"></div>' +
@@ -2776,10 +2764,6 @@
 
     function startCameraScanner() {
       stopCameraScanner();
-      var scanInputEl = el("scanInput");
-      if (scanInputEl) {
-        try { scanInputEl.blur(); } catch (_) {}
-      }
       el("scannerBox").style.display = "block";
       el("scannerStatus").textContent = "Iniciando cámara...";
       camDetectBusy = false;
@@ -2850,8 +2834,7 @@
                     var fmt = "";
                     for (var i = 0; i < codes.length; i++) {
                       if (codes[i] && codes[i].rawValue) {
-                        rawVal = String(codes[i].rawValue).replace(/[
-]+/g, " ").trim();
+                        rawVal = String(codes[i].rawValue).replace(/[\r\n]+/g, " ").trim();
                         fmt = String(codes[i].format || "");
                         if (rawVal) break;
                       }
@@ -2877,8 +2860,7 @@
         el("scannerStatus").textContent = "Escáner activo con ZXing (QR y barras)...";
         zxingReader.decodeFromVideoDevice(null, "scannerVideo", function (result) {
           if (result && result.getText()) {
-            var zCode = String(result.getText() || "").replace(/[
-]+/g, " ").trim();
+            var zCode = String(result.getText() || "").replace(/[\r\n]+/g, " ").trim();
             var fmtObj = typeof result.getBarcodeFormat === "function" ? result.getBarcodeFormat() : null;
             var zFmt = fmtObj === ZXing.BarcodeFormat.QR_CODE ? "qr_code" : "";
             if (shouldSkipDuplicate(zCode)) return;
@@ -3225,29 +3207,10 @@
       };
     });
 
-    function runBackgroundAutoSync() {
-      if (document.hidden || scanBusy || isGeneratingSale || isSavingInventory) {
-        return;
-      }
-      var active = document.activeElement;
-      if (
-        active &&
-        (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT") &&
-        active.id !== "scanInput"
-      ) {
-        return;
-      }
-      syncCatalog(true);
-    }
-
     document.addEventListener("visibilitychange", function () {
       if (!document.hidden) {
-        runBackgroundAutoSync();
+        syncCatalog(true);
       }
-    });
-
-    window.addEventListener("focus", function () {
-      runBackgroundAutoSync();
     });
 
     updateLiveClock();
@@ -3258,9 +3221,6 @@
     applyModeUI();
     syncCatalog(true);
     focusScanInput();
-
-    if (autoSyncIntervalId) clearInterval(autoSyncIntervalId);
-    autoSyncIntervalId = setInterval(runBackgroundAutoSync, 180000);
   </script>
 </body>
 </html>
