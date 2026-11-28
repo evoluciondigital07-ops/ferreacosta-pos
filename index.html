@@ -1196,6 +1196,7 @@
     var denomCounts = {};
     var lastReceiptInfo = null;
     var isScreenLocked = false;
+    var sharedAudioCtx = null;
 
     var isGeneratingSale = false;
     var isSavingInventory = false;
@@ -1293,19 +1294,23 @@
     }
 
     function playBeep(success) {
-      if (!el("soundToggle").checked) return;
+      if (!el("soundToggle") || !el("soundToggle").checked) return;
       try {
         var AudioCtx = window.AudioContext || window.webkitAudioContext;
-        var ctx = new AudioCtx();
-        var osc = ctx.createOscillator();
-        var gain = ctx.createGain();
+        if (!AudioCtx) return;
+        if (!sharedAudioCtx) sharedAudioCtx = new AudioCtx();
+        if (sharedAudioCtx.state === "suspended") {
+          sharedAudioCtx.resume().catch(function () {});
+        }
+        var osc = sharedAudioCtx.createOscillator();
+        var gain = sharedAudioCtx.createGain();
         osc.type = success ? "square" : "sawtooth";
-        osc.frequency.setValueAtTime(success ? 1850 : 320, ctx.currentTime);
-        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        osc.frequency.setValueAtTime(success ? 1850 : 320, sharedAudioCtx.currentTime);
+        gain.gain.setValueAtTime(0.08, sharedAudioCtx.currentTime);
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(sharedAudioCtx.destination);
         osc.start();
-        osc.stop(ctx.currentTime + (success ? 0.11 : 0.22));
+        osc.stop(sharedAudioCtx.currentTime + (success ? 0.11 : 0.22));
       } catch (_) {}
     }
 
@@ -2684,7 +2689,7 @@
     function startCameraScanner() {
       stopCameraScanner();
       el("scannerBox").style.display = "block";
-      el("scannerStatus").textContent = "Iniciando cámara láser...";
+      el("scannerStatus").textContent = "Iniciando cámara...";
       camDetectBusy = false;
       lastRawCandidate = "";
       rawCandidateHits = 0;
@@ -2695,6 +2700,34 @@
         height: { ideal: 720 },
         advanced: [{ focusMode: "continuous" }]
       };
+
+      function shouldSkipDuplicate(codeVal) {
+        var nowMs = Date.now();
+        if (!codeVal || scanBusy || isGeneratingSale) return true;
+        if ((nowMs - lastScanTime) < 650) return true;
+        if (codeVal.toLowerCase() === lastScanCode && (nowMs - lastScanTime) < SCAN_COOLDOWN_MS) return true;
+        return false;
+      }
+
+      function acceptDetectedCode(codeVal, formatHint) {
+        var isQr = formatHint === "qr_code" || /^P-/i.test(codeVal);
+        if (!isQr) {
+          if (codeVal === lastRawCandidate) {
+            rawCandidateHits += 1;
+          } else {
+            lastRawCandidate = codeVal;
+            rawCandidateHits = 1;
+            return;
+          }
+          if (rawCandidateHits < 2) return;
+        }
+        lastRawCandidate = "";
+        rawCandidateHits = 0;
+
+        clearTimeout(autoScanTimer);
+        if (el("scanInput")) el("scanInput").value = "";
+        handleCodeLookup(codeVal, { silentNotFound: false, clearInputOnMatch: true });
+      }
 
       if ("BarcodeDetector" in window && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         navigator.mediaDevices.getUserMedia({ video: videoConstraints })
@@ -2709,52 +2742,30 @@
               var detector = new BarcodeDetector({
                 formats: ["qr_code", "ean_13", "ean_8", "code_128", "code_39", "upc_a", "upc_e", "itf"]
               });
-              el("scannerStatus").textContent = "Escáner láser activo: centra el código o QR";
+              el("scannerStatus").textContent = "Escáner activo: centra el código o QR";
+              var lastTickMs = 0;
 
-              function tick() {
+              function tick(ts) {
                 if (!streamRef) return;
-                if (!camDetectBusy && !scanBusy && !isGeneratingSale && video.readyState >= 2) {
+                if ((ts - lastTickMs) >= 120 && !camDetectBusy && !scanBusy && !isGeneratingSale && video.readyState >= 2) {
+                  lastTickMs = ts;
                   camDetectBusy = true;
                   detector.detect(video).then(function (codes) {
                     camDetectBusy = false;
                     if (!streamRef || !codes || !codes.length) return;
 
                     var rawVal = "";
+                    var fmt = "";
                     for (var i = 0; i < codes.length; i++) {
                       if (codes[i] && codes[i].rawValue) {
                         rawVal = String(codes[i].rawValue).replace(/[\r\n]+/g, " ").trim();
+                        fmt = String(codes[i].format || "");
                         if (rawVal) break;
                       }
                     }
 
-                    var nowScan = Date.now();
-                    if (
-                      !rawVal ||
-                      scanBusy ||
-                      isGeneratingSale ||
-                      (rawVal.toLowerCase() === lastScanCode && (nowScan - lastScanTime) < SCAN_COOLDOWN_MS) ||
-                      (nowScan - lastScanTime) < 650
-                    ) {
-                      return;
-                    }
-
-                    var isProformaQr = /\bP-\d{3,}\b/i.test(rawVal);
-                    if (!isProformaQr) {
-                      if (rawVal === lastRawCandidate) {
-                        rawCandidateHits += 1;
-                      } else {
-                        lastRawCandidate = rawVal;
-                        rawCandidateHits = 1;
-                        return;
-                      }
-                      if (rawCandidateHits < 2) return;
-                    }
-                    lastRawCandidate = "";
-                    rawCandidateHits = 0;
-
-                    clearTimeout(autoScanTimer);
-                    if (el("scanInput")) el("scanInput").value = "";
-                    handleCodeLookup(rawVal, { silentNotFound: false, clearInputOnMatch: true });
+                    if (shouldSkipDuplicate(rawVal)) return;
+                    acceptDetectedCode(rawVal, fmt);
                   }).catch(function () {
                     camDetectBusy = false;
                   });
@@ -2769,51 +2780,14 @@
             el("scannerStatus").textContent = "Permiso de cámara denegado o no disponible.";
           });
       } else if (window.ZXing) {
-        var hints = new Map();
-        hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
-        hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
-          ZXing.BarcodeFormat.QR_CODE,
-          ZXing.BarcodeFormat.EAN_13,
-          ZXing.BarcodeFormat.EAN_8,
-          ZXing.BarcodeFormat.CODE_128,
-          ZXing.BarcodeFormat.CODE_39,
-          ZXing.BarcodeFormat.UPC_A,
-          ZXing.BarcodeFormat.UPC_E,
-          ZXing.BarcodeFormat.ITF
-        ]);
-        zxingReader = new ZXing.BrowserMultiFormatReader(hints, 250);
-        el("scannerStatus").textContent = "Escáner láser activo con ZXing (Alta precisión)...";
+        zxingReader = new ZXing.BrowserMultiFormatReader(null, 400);
+        el("scannerStatus").textContent = "Escáner activo con ZXing...";
         zxingReader.decodeFromVideoDevice(null, "scannerVideo", function (result) {
           if (result && result.getText()) {
             var zCode = String(result.getText() || "").replace(/[\r\n]+/g, " ").trim();
-            var zNow = Date.now();
-            if (
-              scanBusy ||
-              isGeneratingSale ||
-              !zCode ||
-              (zCode.toLowerCase() === lastScanCode && (zNow - lastScanTime) < SCAN_COOLDOWN_MS) ||
-              (zNow - lastScanTime) < 650
-            ) {
-              return;
-            }
-
-            var isProformaQrZ = /\bP-\d{3,}\b/i.test(zCode);
-            if (!isProformaQrZ) {
-              if (zCode === lastRawCandidate) {
-                rawCandidateHits += 1;
-              } else {
-                lastRawCandidate = zCode;
-                rawCandidateHits = 1;
-                return;
-              }
-              if (rawCandidateHits < 2) return;
-            }
-            lastRawCandidate = "";
-            rawCandidateHits = 0;
-
-            clearTimeout(autoScanTimer);
-            if (el("scanInput")) el("scanInput").value = "";
-            handleCodeLookup(zCode, { silentNotFound: false, clearInputOnMatch: true });
+            var zFmt = result.getBarcodeFormat === ZXing.BarcodeFormat.QR_CODE ? "qr_code" : "";
+            if (shouldSkipDuplicate(zCode)) return;
+            acceptDetectedCode(zCode, zFmt);
           }
         }).catch(function () {
           el("scannerStatus").textContent = "No se pudo iniciar la cámara.";
