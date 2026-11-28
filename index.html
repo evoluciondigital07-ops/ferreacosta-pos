@@ -352,11 +352,46 @@
     #scannerBox {
       display: none;
       margin-top: 10px;
-      border: 1px solid var(--info);
-      border-radius: 12px;
+      border: 1px solid rgba(56, 189, 248, 0.55);
+      border-radius: 14px;
       overflow: hidden;
-      background: #020617;
-      box-shadow: 0 0 24px rgba(56, 189, 248, 0.18);
+      background: linear-gradient(180deg, #071124 0%, #020617 100%);
+      box-shadow: 0 12px 28px rgba(2, 6, 23, 0.65), 0 0 22px rgba(56, 189, 248, 0.16);
+    }
+
+    .scanner-top-hud {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 10px;
+      background: rgba(15, 23, 42, 0.92);
+      border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+      font-size: 0.7rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      color: #bae6fd;
+    }
+
+    .scanner-live-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 700;
+      color: #38bdf8;
+    }
+
+    .scanner-live-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: #10b981;
+      box-shadow: 0 0 8px #10b981;
+      animation: pulseDot 1.3s infinite alternate;
+    }
+
+    @keyframes pulseDot {
+      0% { opacity: 0.45; transform: scale(0.9); }
+      100% { opacity: 1; transform: scale(1.15); }
     }
 
     .scanner-stage {
@@ -378,48 +413,68 @@
       inset: 0;
       pointer-events: none;
       display: flex;
+      flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: radial-gradient(circle at center, transparent 42%, rgba(2, 6, 23, 0.55) 100%);
+      gap: 8px;
+      background: radial-gradient(circle at center, transparent 38%, rgba(2, 6, 23, 0.65) 100%);
     }
 
     .reticle {
       position: relative;
-      width: 76%;
+      width: 78%;
       max-width: 320px;
-      height: 128px;
-      border-radius: 10px;
-      box-shadow: 0 0 0 999px rgba(2, 6, 23, 0.22);
+      height: 132px;
+      border-radius: 12px;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      box-shadow: 0 0 0 999px rgba(2, 6, 23, 0.26), inset 0 0 18px rgba(56, 189, 248, 0.12);
     }
 
     .reticle::before, .reticle::after,
     .reticle-corners::before, .reticle-corners::after {
       content: "";
       position: absolute;
-      width: 22px;
-      height: 22px;
+      width: 24px;
+      height: 24px;
       border-color: #38bdf8;
       border-style: solid;
+      transition: border-color 0.2s ease;
     }
 
-    .reticle::before { top: -2px; left: -2px; border-width: 4px 0 0 4px; border-top-left-radius: 8px; }
-    .reticle::after { top: -2px; right: -2px; border-width: 4px 4px 0 0; border-top-right-radius: 8px; }
-    .reticle-corners::before { bottom: -2px; left: -2px; border-width: 0 0 4px 4px; border-bottom-left-radius: 8px; }
-    .reticle-corners::after { bottom: -2px; right: -2px; border-width: 0 4px 4px 0; border-bottom-right-radius: 8px; }
+    .reticle::before { top: -2px; left: -2px; border-width: 4px 0 0 4px; border-top-left-radius: 10px; }
+    .reticle::after { top: -2px; right: -2px; border-width: 4px 4px 0 0; border-top-right-radius: 10px; }
+    .reticle-corners::before { bottom: -2px; left: -2px; border-width: 0 0 4px 4px; border-bottom-left-radius: 10px; }
+    .reticle-corners::after { bottom: -2px; right: -2px; border-width: 0 4px 4px 0; border-bottom-right-radius: 10px; }
+
+    .scanner-hint-tag {
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: rgba(2, 6, 23, 0.78);
+      border: 1px solid rgba(56, 189, 248, 0.4);
+      color: #e0f2fe;
+    }
 
     .laser-line {
       position: absolute;
-      left: 6%;
-      right: 6%;
+      left: 5%;
+      right: 5%;
       height: 3px;
-      background: linear-gradient(90deg, transparent, #ef4444, #ff6b6b, #ef4444, transparent);
-      box-shadow: 0 0 12px #ef4444, 0 0 22px rgba(239, 68, 68, 0.8);
-      animation: laserSweep 1.7s ease-in-out infinite alternate;
+      background: linear-gradient(90deg, transparent, #ef4444, #fda4af, #ef4444, transparent);
+      box-shadow: 0 0 12px #ef4444, 0 0 24px rgba(239, 68, 68, 0.85);
+      animation: laserSweep 1.65s ease-in-out infinite alternate;
     }
 
     @keyframes laserSweep {
       0% { top: 14%; }
       100% { top: 84%; }
+    }
+
+    .scanner-stage.scan-hit .reticle {
+      border-color: rgba(16, 185, 129, 0.55);
+      box-shadow: 0 0 0 999px rgba(2, 6, 23, 0.26), inset 0 0 24px rgba(16, 185, 129, 0.25);
     }
 
     .scanner-stage.scan-hit .reticle::before,
@@ -430,8 +485,8 @@
     }
 
     .scanner-stage.scan-hit .laser-line {
-      background: linear-gradient(90deg, transparent, #10b981, #6ee7b7, #10b981, transparent);
-      box-shadow: 0 0 16px #10b981;
+      background: linear-gradient(90deg, transparent, #10b981, #a7f3d0, #10b981, transparent);
+      box-shadow: 0 0 18px #10b981;
     }
 
     .scanner-bar {
@@ -440,8 +495,10 @@
       align-items: center;
       gap: 8px;
       padding: 8px 10px;
-      background: #0f172a;
-      font-size: 0.82rem;
+      background: #0b1324;
+      border-top: 1px solid var(--border);
+      font-size: 0.8rem;
+      color: #e2e8f0;
     }
 
     .product-list {
@@ -914,6 +971,10 @@
         </div>
 
         <div id="scannerBox">
+          <div class="scanner-top-hud">
+            <span class="scanner-live-pill"><span class="scanner-live-dot"></span> VISOR ÓPTICO</span>
+            <span>FERREACOSTA POS</span>
+          </div>
           <div id="scannerStage" class="scanner-stage">
             <video id="scannerVideo" playsinline muted></video>
             <div class="scanner-overlay">
@@ -921,6 +982,7 @@
                 <div class="reticle-corners"></div>
                 <div class="laser-line"></div>
               </div>
+              <span class="scanner-hint-tag">Alinea código de barras o QR</span>
             </div>
           </div>
           <div class="scanner-bar">
@@ -1125,6 +1187,7 @@
     var lastScanCode = "";
     var lastScanTime = 0;
     var scanBusy = false;
+    var camDetectBusy = false;
     var autoScanTimer = null;
     var filterDebounceTimer = null;
     var selectedDenomLabel = "";
@@ -2619,41 +2682,70 @@
     }
 
     function startCameraScanner() {
+      stopCameraScanner();
       el("scannerBox").style.display = "block";
       el("scannerStatus").textContent = "Iniciando cámara láser...";
+      camDetectBusy = false;
+
+      var videoConstraints = {
+        facingMode: { ideal: "environment" },
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        advanced: [{ focusMode: "continuous" }]
+      };
+
       if ("BarcodeDetector" in window && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-        navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } })
+        navigator.mediaDevices.getUserMedia({ video: videoConstraints })
+          .catch(function () {
+            return navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: "environment" } } });
+          })
           .then(function (stream) {
             streamRef = stream;
             var video = el("scannerVideo");
             video.srcObject = stream;
             return video.play().then(function () {
               var detector = new BarcodeDetector({
-                formats: ["qr_code", "ean_13", "ean_8", "code_128", "code_39", "upc_a", "upc_e"]
+                formats: ["qr_code", "ean_13", "ean_8", "code_128", "code_39", "upc_a", "upc_e", "itf"]
               });
               el("scannerStatus").textContent = "Escáner láser activo: centra el código o QR";
+
               function tick() {
                 if (!streamRef) return;
-                detector.detect(video).then(function (codes) {
-                  if (codes && codes.length > 0 && codes[0].rawValue) {
-                    var scannedCode = String(codes[0].rawValue || "").trim();
+                if (!camDetectBusy && !scanBusy && !isGeneratingSale && video.readyState >= 2) {
+                  camDetectBusy = true;
+                  detector.detect(video).then(function (codes) {
+                    camDetectBusy = false;
+                    if (!streamRef || !codes || !codes.length) return;
+
+                    var rawVal = "";
+                    for (var i = 0; i < codes.length; i++) {
+                      if (codes[i] && codes[i].rawValue) {
+                        rawVal = String(codes[i].rawValue).replace(/[\r\n]+/g, " ").trim();
+                        if (rawVal) break;
+                      }
+                    }
+
                     var nowScan = Date.now();
                     if (
+                      !rawVal ||
                       scanBusy ||
                       isGeneratingSale ||
-                      !scannedCode ||
-                      (scannedCode.toLowerCase() === lastScanCode && (nowScan - lastScanTime) < SCAN_COOLDOWN_MS) ||
-                      (nowScan - lastScanTime) < 800
+                      (rawVal.toLowerCase() === lastScanCode && (nowScan - lastScanTime) < SCAN_COOLDOWN_MS) ||
+                      (nowScan - lastScanTime) < 650
                     ) {
                       return;
                     }
+
                     clearTimeout(autoScanTimer);
                     if (el("scanInput")) el("scanInput").value = "";
-                    handleCodeLookup(scannedCode, { silentNotFound: false, clearInputOnMatch: true });
-                  }
-                }).catch(function () {});
+                    handleCodeLookup(rawVal, { silentNotFound: false, clearInputOnMatch: true });
+                  }).catch(function () {
+                    camDetectBusy = false;
+                  });
+                }
                 scanLoopId = requestAnimationFrame(tick);
               }
+
               scanLoopId = requestAnimationFrame(tick);
             });
           })
@@ -2665,14 +2757,14 @@
         el("scannerStatus").textContent = "Escáner láser activo con ZXing...";
         zxingReader.decodeFromVideoDevice(null, "scannerVideo", function (result) {
           if (result && result.getText()) {
-            var zCode = String(result.getText() || "").trim();
+            var zCode = String(result.getText() || "").replace(/[\r\n]+/g, " ").trim();
             var zNow = Date.now();
             if (
               scanBusy ||
               isGeneratingSale ||
               !zCode ||
               (zCode.toLowerCase() === lastScanCode && (zNow - lastScanTime) < SCAN_COOLDOWN_MS) ||
-              (zNow - lastScanTime) < 800
+              (zNow - lastScanTime) < 650
             ) {
               return;
             }
@@ -2689,6 +2781,7 @@
     }
 
     function stopCameraScanner() {
+      camDetectBusy = false;
       if (scanLoopId) cancelAnimationFrame(scanLoopId);
       scanLoopId = null;
       if (streamRef) {
