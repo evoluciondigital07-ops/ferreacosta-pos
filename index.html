@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <meta http-equiv="Expires" content="0" />
   <title>FERREACOSTA POS - Caja Supermercado</title>
   <script src="https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
@@ -1197,6 +1200,7 @@
     var lastReceiptInfo = null;
     var isScreenLocked = false;
     var sharedAudioCtx = null;
+    var autoSyncIntervalId = null;
 
     var isGeneratingSale = false;
     var isSavingInventory = false;
@@ -1208,7 +1212,14 @@
       return document.getElementById(id);
     }
 
+    function isCameraActive() {
+      var box = el("scannerBox");
+      var boxOpen = Boolean(box && box.style.display === "block");
+      return Boolean(boxOpen || streamRef || scanLoopId);
+    }
+
     function focusScanInput() {
+      if (isCameraActive()) return;
       var scanEl = el("scanInput");
       if (!scanEl) return;
       var active = document.activeElement;
@@ -1221,6 +1232,7 @@
         return;
       }
       setTimeout(function () {
+        if (isCameraActive()) return;
         var vModal = el("vendorModal");
         if (vModal && vModal.classList.contains("open")) return;
         var currentActive = document.activeElement;
@@ -1693,7 +1705,7 @@
         }
       }
 
-    if (existing) {
+      if (existing) {
         existing.stock_fisico = Number((existing.stock_fisico + amount).toFixed(2));
         existing.stock_sistema = sysStock;
         existing.unidad = unitDisp;
@@ -2764,6 +2776,10 @@
 
     function startCameraScanner() {
       stopCameraScanner();
+      var scanInputEl = el("scanInput");
+      if (scanInputEl) {
+        try { scanInputEl.blur(); } catch (_) {}
+      }
       el("scannerBox").style.display = "block";
       el("scannerStatus").textContent = "Iniciando cámara...";
       camDetectBusy = false;
